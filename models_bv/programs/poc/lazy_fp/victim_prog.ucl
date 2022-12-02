@@ -1,0 +1,56 @@
+module common {
+    const zero:  reg_index_t = 0bv5;
+    const rax:   reg_index_t = 1bv5;
+    const rcx:   reg_index_t = 2bv5;
+    const rbx:   reg_index_t = 3bv5;
+    const gp:    reg_index_t = 4bv5;
+    const sp:    reg_index_t = 5bv5;
+    
+    // FP registers
+    const xmm0:  reg_index_t = 10bv5;
+    assume (REG_PUBLIC_END == 10bv5);
+
+    const A_ADDR: addr_t = 1000bv64;
+    const B_ADDR: addr_t = 2000bv64;
+    const C_ADDR: addr_t = 3000bv64;
+
+}
+
+/*  Reference: https://arxiv.org/pdf/1806.07480.pdf
+     - the following program models Figure 1
+
+ */
+module platform {
+    /*  Victim function called to load secret into the xmm0 register
+     */
+    procedure blockA()
+    {
+        // read secret value into xmm0
+        call loadi(xmm0, secret_vaddr);
+        call load(xmm0, xmm0, 0bv64);
+    }
+
+    procedure blockB() {}
+
+    /*  Set the initial PC
+     */
+    axiom pc_init == A_ADDR;
+
+    /*  Ignore all exceptions.
+     */
+    axiom get_excp() != abort_page_semantics;
+
+    /*  Only verify with virtualization.
+     */
+    axiom virtualization;
+
+    /*  Additional assumptions for the program
+     */
+    procedure platform_init_assumptions() {
+        call setup_bmc_init_assumptions();
+    }
+}
+
+module main {
+    procedure main_init_assumptions() {}
+}

@@ -1,0 +1,43 @@
+module main {
+	/* Adversary input and operation
+	 */
+	var adv_input: adv_input_t;
+	var adv_op: adv_op_t;
+
+	/* 	Create two traces of the platform
+	 */
+	instance p1: platform(adv_input: (adv_input),
+	 				      adv_op: (adv_op));
+	instance p2: platform(adv_input: (adv_input),
+						  adv_op: (adv_op));
+
+	/* 	Prove that the obervations are the same
+	 */
+	invariant obs_same: (p1.cpid == ADVERSARY_PID) ==> p1.observations == p2.observations;
+
+    /*  Assume that the process IDs are the same across traces since this is controlled
+     *  by the untrusted OS.
+     */
+    axiom p1.cpid == p2.cpid;
+
+    /*  Assume virtualization is either turned on or off.
+     */
+	axiom p1.virtualization == p2.virtualization;
+
+	/*	Step counter used for debugging
+	 */
+	var step: bv5;
+
+	init {
+		step = 0bv5;
+		call main_init_assumptions();
+	}
+
+	next {
+		havoc adv_op;
+		havoc adv_input;
+		step' = step + 1bv5;
+		next(p1);
+		next(p2);
+	}
+}

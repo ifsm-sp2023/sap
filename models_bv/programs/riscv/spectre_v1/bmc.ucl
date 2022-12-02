@@ -1,0 +1,49 @@
+module platform {
+    next {
+        call choose_process();
+        case
+            (pc == 65872bv64 && pid() == VICTIM_PID): {
+                call block1();
+            }
+            (pc == 65900bv64 && pid() == VICTIM_PID): {
+                call block2();
+            }
+            (pid() == ADVERSARY_PID): {
+                call adv_execute();
+            }
+            default: {
+                skip;
+            }
+        esac
+    }
+}
+
+module main {    
+    control {
+        // set_solver_option(":mbqi", false);
+        set_solver_option(":case_split", 0);
+        set_solver_option(":relevancy", 0);
+        set_solver_option(":threads", 8);
+        set_solver_option(":blast_full", true);
+        
+        v = bmc(3);
+        check;
+        print_results;
+        v.print_cex(
+            p1.pc, p2.pc,
+            p1.regs[a0], p2.regs[a0],
+            p1.regs[a4], p2.regs[a4],
+            p1.regs[a5], p2.regs[a5],
+            p1.regs[sp], p2.regs[sp],
+            p1.regs[gp], p2.regs[gp],
+            p1.owner == p2.owner,
+            p1.tlb_valid == p2.tlb_valid,
+            p1.addr_map == p2.addr_map,
+            p1.observations, p2.observations,
+            p1.cache_hit_map, p2.cache_hit_map,
+            p1.adv_input, p2.adv_input,
+            p1.cpid == ADVERSARY_PID, p2.cpid == ADVERSARY_PID,
+            secret_addr
+        );
+    }
+}

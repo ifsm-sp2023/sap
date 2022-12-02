@@ -1,0 +1,13 @@
+module platform {
+	type * = common.*;
+	define * = common.*;
+	function * = common.*;
+	const * = common.*;
+}
+
+module main {
+	type * = platform.*;
+	define * = platform.*;
+	function * = platform.*;
+	const * = platform.*;
+}

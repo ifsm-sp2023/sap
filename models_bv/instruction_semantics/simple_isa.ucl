@@ -1,0 +1,225 @@
+module platform {
+    // ========================================================================================= //
+    // TAINT FUNCTIONS
+
+    /*  Propagates taint of two operands.
+     */
+    function taint_(w1: word_t, w2: word_t): word_t;
+
+    /*  Propagates taint of register values.
+     *
+     *  rd:  destination register
+     *  rs1: source register 1
+     *  rs2: source register 2
+     */
+    procedure taint_regs(rd: reg_index_t, rs1: reg_index_t, rs2: reg_index_t)
+    {
+        call write_reg(rd, taint_(read_reg(rs1), read_reg(rs2)), tau(get_regs_taint(rs1), get_regs_taint(rs2)));
+    }
+
+    /*  Propagates taint of register values.
+     *
+     *  rd:  destination register
+     *  rs:  source register 1
+     *  imm: immediate value
+     */
+    procedure taint_regs_imm(rd: reg_index_t, rs: reg_index_t, imm: word_t)
+    {
+        call write_reg(rd, taint_(read_reg(rs), imm), get_regs_taint(rs));
+    }
+
+    /*  ALU OP
+     *
+     *  ISA Semantics: regs[rd] = regs[rs1] <binary op> regs[rs2]
+     *  
+     *  ALU operation as an abstraction of operations such as addition, multiplication and etc.
+     *  This operation uses an two register values.
+     */
+    procedure isa_alu_op(rd: reg_index_t, rs1: reg_index_t, rs2: reg_index_t)
+    {
+        call taint_regs(rd, rs1, rs2);
+    }
+
+    /*  ALU OP IMM
+     *
+     *  ISA Semantics: regs[rd] = regs[rs1] <binary op> regs[rs2]
+     *  
+     *  ALU operation as an abstraction of operations such as addition, multiplication and etc.
+     *  This operation uses a register and immediate value.
+     */
+    procedure isa_alu_op_imm(rd: reg_index_t, rs: reg_index_t, imm: word_t)
+    {
+        call write_reg(rd, taint_(read_reg(rs), imm), get_regs_taint(rs));
+    }
+
+    // ========================================================================================= //
+    // MICROARCHITECTURAL STATE SEMANTICS FOR THE SIMPLE INSTRUCTION SET ARCHITECTURE LANGUAGE
+
+    
+
+    // ========================================================================================= //
+    // INSTRUCTION SEMANTICS FOR THE SIMPLE INSTRUCTION SET ARCHITECTURE LANGUAGE
+
+    /*  MOV
+     *
+     *  ISA Semantics: regs[rd] = regs[rs]
+     */
+    procedure isa_mov(rd: reg_index_t, rs: reg_index_t)
+    {
+        call write_reg(rd, read_reg(rs), get_regs_taint(rs));
+    }
+
+    /*  ADD
+     *
+     *  ISA Semantics: regs[rd] = regs[rs1] + regs[rs2]
+     *  
+     *  ALU operation as an abstraction of operations such as addition, multiplication and etc.
+     *  This operation uses an two register values.
+     */
+    procedure isa_add(rd: reg_index_t, rs1: reg_index_t, rs2: reg_index_t)
+    {
+        call write_reg(rd, read_reg(rs1) + read_reg(rs2), tau(get_regs_taint(rs1), get_regs_taint(rs2)));
+    }
+
+    /*  ADD IMM
+     *
+     *  ISA Semantics: regs[rd] = regs[rs1] + imm
+     *  
+     *  ALU operation as an abstraction of operations such as addition, multiplication and etc.
+     *  This operation uses a register and immediate value.
+     */
+    procedure isa_addi(rd: reg_index_t, rs: reg_index_t, imm: word_t)
+    {
+        call write_reg(rd, read_reg(rs) + imm, get_regs_taint(rs));
+    }
+
+    /*  ADD IMM
+     *
+     *  ISA Semantics: regs[rd] = regs[rs1] & imm
+     *  
+     *  ALU operation as an abstraction of operations such as addition, multiplication and etc.
+     *  This operation uses a register and immediate value.
+     */
+    procedure isa_andi(rd: reg_index_t, rs: reg_index_t, imm: word_t)
+    {
+        call write_reg(rd, read_reg(rs) & imm, get_regs_taint(rs));
+    }
+
+    /*  MUL IMM
+     *
+     *  ISA Semantics: regs[rd] = regs[rs1] + imm
+     *  
+     *  ALU operation as an abstraction of operations such as addition, multiplication and etc.
+     *  This operation uses a register and immediate value.
+     */
+    procedure isa_muli(rd: reg_index_t, rs: reg_index_t, imm: word_t)
+    {
+        call write_reg(rd, read_reg(rs) * imm, get_regs_taint(rs));
+    }
+
+    /*  LOAD
+     *
+     *  ISA Semantics: regs[rd] = mem[regs[rs] + offset]
+     */
+    procedure isa_load(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        // address to read from
+        var vaddr: vaddr_t;
+        // value to read into register `rd`
+        var val: word_t;
+
+        // compute physical address
+        vaddr = read_reg(rs) + offset;
+
+        {
+        // read from memory
+        var taint: boolean;
+        call (val, taint) = read_mem(vaddr);
+
+        // forward to register
+        call write_reg(rd, val, taint);
+        }
+    }
+
+    /*  LOAD IMM
+     *
+     *  ISA Semantics: regs[rd] = imm
+     */
+    procedure isa_loadi(rd: reg_index_t, imm: word_t)
+    {
+        call write_reg(rd, imm, false);
+    }
+
+    /*  STORE
+     *
+     *  ISA Semantics: mem[regs[rd] + offset] = regs[rs]
+     */
+    procedure isa_store(rs: reg_index_t, rd: reg_index_t, offset: word_t)
+    {
+        // address to store to
+        var vaddr: vaddr_t;
+        var addr: addr_t;
+
+        // compute physical address
+        vaddr = read_reg(rd) + offset;
+        call (addr) = translate_vaddr(vaddr);
+        assume (lo_translate_vaddr(vaddr));
+
+        // store to memory
+        call write_mem(addr, read_reg(rs));
+    }
+
+    /*  Branch greater than equal to.
+     *
+     *  ISA Semantics: if (regs[rs1] >= regs[rs2]) then pc := t1 else pc := t2
+     */
+    procedure isa_bge(rs1: reg_index_t, rs2: reg_index_t, t1: addr_t, t2: addr_t)
+    {
+        if (read_reg(rs1) >= read_reg(rs2)) {
+            call write_pc(t1);
+        } else {
+            call write_pc(t2);
+        }
+    }
+
+    /*  Branch greater than.
+     *
+     *  ISA Semantics: if (regs[rs1] > regs[rs2]) then pc := t1 else pc := t2
+     */
+    procedure isa_bgt(rs1: reg_index_t, rs2: reg_index_t, t1: addr_t, t2: addr_t)
+    {
+        if (read_reg(rs1) > read_reg(rs2)) {
+            call write_pc(t1);
+        } else {
+            call write_pc(t2);
+        }
+    }
+
+    /*  Indirect jump.
+     *
+     *  ISA Semantics: if (regs[rs1] >= regs[rs2]) then pc := t1 else pc := t2
+     */
+    procedure isa_jmp(rd: reg_index_t)
+    {
+        var hit: boolean;
+        var guess: addr_t;
+        
+        call write_pc(read_reg(rd));
+    }
+
+    /*  Cache line flush instruction.
+     *
+     *  Semantics: Flushes the cache line at the address
+     */
+    procedure isa_clflush(ri: reg_index_t)
+    {
+    }
+
+    /*  Cache flush.
+     *
+     *  Semantics: Flushes the entire cache
+     */
+    procedure isa_cflush()
+    {
+    }
+}

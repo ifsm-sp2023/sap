@@ -1,0 +1,63 @@
+module platform {
+    // ========================================================================================= //
+    // SEMANTICS FOR THE SIMPLE INSTRUCTION SET ARCHITECTURE LANGUAGE
+    procedure mov(rd: reg_index_t, rs: reg_index_t)
+    {
+        call isa_mov(rd, rs);
+    }
+
+    procedure add(rd: reg_index_t, rs1: reg_index_t, rs2: reg_index_t)
+    {
+        call isa_add(rd, rs1, rs2);
+    }
+
+    procedure addi(rd: reg_index_t, rs: reg_index_t, imm: word_t)
+    {
+        call isa_addi(rd, rs, imm);
+    }
+
+    procedure muli(rd: reg_index_t, rs: reg_index_t, imm: word_t)
+    {
+        call isa_muli(rd, rs, imm);
+    }
+
+    procedure load(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        call isa_load(rd, rs, offset);
+    }
+
+    procedure loadi(rd: reg_index_t, imm: word_t)
+    {
+        call isa_loadi(rd, imm);
+    }
+
+    procedure store(rs: reg_index_t, rd: reg_index_t, offset: word_t)
+    {
+        call isa_store(rs, rd, offset);
+    }
+
+    procedure bge(rs1: reg_index_t, rs2: reg_index_t, t1: addr_t, t2: addr_t)
+    {
+        call isa_bge(rs1, rs2, t1, t2);
+    }
+
+    procedure bgt(rs1: reg_index_t, rs2: reg_index_t, t1: addr_t, t2: addr_t)
+    {
+        call isa_bgt(rs1, rs2, t1, t2);
+    }
+
+    procedure jmp(rd: reg_index_t)
+    {
+        call isa_jmp(rd);
+    }
+
+    procedure clflush(ri: reg_index_t)
+    {
+        call isa_clflush(ri);
+    }
+
+    procedure cflush()
+    {
+        call set_const_cache_state();
+    }
+}

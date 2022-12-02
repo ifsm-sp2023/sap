@@ -1,0 +1,120 @@
+module common {
+    type tlb_index_t;
+
+    /*  TLB hit and taint map
+     */
+    type tlb_tag_t   = [tlb_index_t]vaddr_t;
+    type tlb_valid_t = [tlb_index_t]boolean;
+    type tlb_taint_t = [tlb_index_t]boolean;
+
+    function get_tlb_index(va: vaddr_t): tlb_index_t;
+
+    /*  Constants
+     */
+    const const_tlb_tag: tlb_tag_t;
+    const const_tlb_valid: tlb_valid_t;
+}
+
+/*	Abstract model of translation lookaside buffer.
+ *  
+ *  TODO: For transitions between enclave and non-enclaves operating modes,
+ *        the TLB entries associated to enclaves are flushed.  
+ *
+ */
+module platform {
+    // ========================================================================================= //
+    // MICRO-ARCHITECTURE STATE
+
+    /*  Legacy page table permission map
+     */
+    var tlb_tag: tlb_tag_t;
+    var tlb_valid: tlb_valid_t;
+    var tlb_taint: tlb_taint_t;
+    
+    // ========================================================================================= //
+    // INITIALIZATION
+
+    procedure initialize_tlb()
+    {
+        call set_const_tlb_valid();
+    }
+
+    // ========================================================================================= //
+    // HELPERS
+
+    /*  Set the LFB state to some constant
+     */
+    procedure set_const_tlb_valid()
+    {
+        tlb_tag   = const_tlb_tag;
+        tlb_valid = const_tlb_valid;
+        tlb_taint = const(false, tlb_taint_t);
+    }
+
+    /*  Set the line fill buffer hit map.
+     */
+    procedure set_tlb(vaddr: vaddr_t, hit: boolean, taint: boolean)
+    {
+        var tlb_index: tlb_index_t;
+        tlb_index = get_tlb_index(vaddr);
+        tlb_tag[tlb_index] = vaddr;
+    	tlb_valid[tlb_index] = hit;
+        tlb_taint[tlb_index] = taint;
+    }
+
+    /*  Read TLB hit
+     */
+    procedure tlb_hit(vaddr: vaddr_t)
+        returns (res: boolean, taint: boolean)
+    {
+        var tlb_index: tlb_index_t;
+        tlb_index = get_tlb_index(vaddr);
+        res = (tlb_tag[tlb_index] == vaddr && tlb_valid[tlb_index] && r_perm(vaddr));
+        taint = tlb_taint[tlb_index];
+    }
+
+    // ========================================================================================= //
+    // HARNESSES
+
+    /*  Read the TLB's translation.
+     */
+    procedure tlb_translate_vaddr(vaddr: vaddr_t)
+        returns (addr: addr_t)
+    {
+        // assume the address is low if vaddr is
+        assume (lo_translate_vaddr(vaddr));
+
+        // compute the physical address; assumes TLB is consistent with page tables
+        call (addr) = translate_vaddr(vaddr);
+    }
+
+    /*  Condition for reading with the TLB translation.
+     */
+    procedure tlb_read_translate_vaddr_cond(vaddr: vaddr_t)
+        returns (res: boolean)
+    {
+        var tlb_index: tlb_index_t;
+        tlb_index = get_tlb_index(vaddr);
+
+        // assume the address is low if vaddr is
+        assume (lo_translate_vaddr(vaddr));
+
+        // return whether the TLB should be read; assume tlb permission is consistent with page tables
+        res = (tlb_tag[tlb_index] == vaddr && tlb_valid[tlb_index] && r_perm(vaddr) && page_owner(vaddr) == pid());
+    }
+
+    /*  Condition for writing with TLB translation.
+     */
+    procedure tlb_write_translate_vaddr_cond(vaddr: vaddr_t)
+        returns (res: boolean)
+    {
+        var tlb_index: tlb_index_t;
+        tlb_index = get_tlb_index(vaddr);
+
+        // assume the address is low if vaddr is
+        assume (lo_translate_vaddr(vaddr));
+
+        // return whether the TLB should be read; assume tlb permission is consistent with page tables
+        res = (tlb_tag[tlb_index] == vaddr && tlb_valid[tlb_index] && w_perm(vaddr) && page_owner(vaddr) == pid());
+    }
+}

@@ -1,0 +1,11 @@
+module platform {
+    // ========================================================================================= //
+    // SEMANTICS FOR THE SIMPLE INSTRUCTION SET ARCHITECTURE LANGUAGE
+    procedure __mm256_instruction__()
+    {
+        // turn on the avx2 unit for computation
+        call turn_on_avx2();
+
+        // FIXME: ignore semantics
+    }
+}

@@ -1,0 +1,80 @@
+module common {
+    const zero:  reg_index_t = 0bv5;
+    const a0:    reg_index_t = 1bv5;
+    const a1:    reg_index_t = 2bv5;
+    const a2:    reg_index_t = 3bv5;
+    const a3:    reg_index_t = 4bv5;
+    const a4:    reg_index_t = 5bv5;
+    const a5:    reg_index_t = 6bv5;
+    const gp:    reg_index_t = 7bv5;
+    const sp:    reg_index_t = 8bv5;
+
+    const A_ADDR: addr_t = 1000bv64;
+    const B_ADDR: addr_t = 2000bv64;
+    const C_ADDR: addr_t = 3000bv64;
+}
+
+/*  Reference: https://meltdownattack.com/meltdown.pdf
+     - the following program models listing 2 with some simplifications
+ */
+module platform {
+
+    procedure blockA()
+    {
+        // store untrusted value
+        // assume regs[a0] == untrusted_value and &arg_copy == regs[a0]
+        // *arg_copy = untrusted_value
+        call store(a0, a1, 0bv64);
+
+        // goto blockB
+        call write_pc(B_ADDR);
+    }
+
+    procedure blockB()
+    {
+        // a3 = *trusted_ptr
+        call load(a3, a2, 0bv64);
+
+        // a3 = **trusted_ptr
+        call load(a4, a3, 0bv64);
+
+        // array[**trusted_ptr]
+        call load(a5, a4, 0bv64);
+        
+        // goto blockC
+        call write_pc(C_ADDR);
+    }
+
+    /*  Set the initial PC
+     */
+    axiom pc_init == A_ADDR;
+
+    /*  Ignore all exceptions.
+     */
+    axiom get_excp() != abort_page_semantics;
+
+    /*  Only verify with virtualization.
+     */
+    axiom virtualization;
+
+    /*  Additional assumptions for the program
+     */
+    procedure platform_init_assumptions() {
+        call setup_bmc_init_assumptions();
+
+        // assume that trusted pointer at a2 doesn't point to secret
+        assume (lo_vaddr(read_reg(a2)));
+        assume (lo_addr(addr_map[read_reg(a2)]));
+        // assume (lo_vaddr(store_buffer[addr_map[read_reg(a2)]].data));
+        assume (!store_buffer[addr_map[read_reg(a2)]].valid);
+        assume (lo_vaddr(mem[addr_map[read_reg(a2)]]));
+        // assume (lo_addr(addr_map[mem[addr_map[read_reg(a2)]]]));
+        // assume (lo_vaddr(mem[addr_map[mem[addr_map[read_reg(a2)]]]]));
+        // assume (lo_vaddr(store_buffer[addr_map[mem[addr_map[read_reg(a2)]]]].data));
+        assume (!store_buffer[addr_map[mem[addr_map[read_reg(a2)]]]].valid);
+    }
+}
+
+module main {
+    procedure main_init_assumptions() {}
+}

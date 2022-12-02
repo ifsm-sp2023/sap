@@ -1,0 +1,198 @@
+/*  Simple RISC-V ISA model with microarchitectural semantics. This
+ *  microarchitectural model only preserves taint of variables and
+ *  hence is "simple" in that it over approximates the values of
+ *  computation done by the arithmetic-logic unit (ALU).
+ *
+ *  TODO: This is to be replaced by more accurate RISC-V instruction
+ *        semantics.
+ */
+module common {
+    const zero: reg_index_t = 0bv5;
+    const s0:   reg_index_t = 1bv5;
+    const sp:   reg_index_t = 2bv5;
+    const a0:   reg_index_t = 3bv5;
+    const a1:   reg_index_t = 4bv5;
+    const a2:   reg_index_t = 5bv5;
+    const a3:   reg_index_t = 6bv5;
+    const a4:   reg_index_t = 7bv5;
+    const a5:   reg_index_t = 8bv5;
+    const gp:   reg_index_t = 9bv5;
+    const ra:   reg_index_t = 10bv5;
+
+    function branch_cond(w1: word_t, w2: word_t): boolean;
+}
+
+module platform {
+    procedure and(rd: reg_index_t, rs1: reg_index_t, rs2: reg_index_t)
+    {
+        var rs1_32: bv32;
+        var rs2_32: bv32;
+
+        rs1_32 = read_reg(rs1)[31:0];
+        rs2_32 = read_reg(rs2)[31:0];
+
+        call write_reg(rd, bv_sign_extend(32, rs1_32 & rs2_32));
+    }
+
+    procedure mulw(rd: reg_index_t, rs1: reg_index_t, rs2: reg_index_t)
+    {
+        var rs1_32: bv32;
+        var rs2_32: bv32;
+
+        rs1_32 = read_reg(rs1)[31:0];
+        rs2_32 = read_reg(rs2)[31:0];
+
+        call write_reg(rd, bv_sign_extend(32, rs1_32 * rs2_32));
+    }
+
+    procedure add(rd: reg_index_t, rs1: reg_index_t, rs2: reg_index_t)
+    {
+        // var rs1_32: bv32;
+        // var rs2_32: bv32;
+
+        // rs1_32 = read_reg(rs1)[31:0];
+        // rs2_32 = read_reg(rs2)[31:0];
+
+        // call write_reg(rd, bv_sign_extend(32, rs1_32 + rs2_32));
+        call isa_add(rd, rs1, rs2);
+    }
+
+    procedure addw(rd: reg_index_t, rs1: reg_index_t, rs2: reg_index_t)
+    {
+        // var rs1_32: bv32;
+        // var rs2_32: bv32;
+
+        // rs1_32 = read_reg(rs1)[31:0];
+        // rs2_32 = read_reg(rs2)[31:0];
+
+        // call write_reg(rd, bv_sign_extend(32, rs1_32 + rs2_32));
+        call isa_add(rd, rs1, rs2);
+    }
+
+    procedure andi(rd: reg_index_t, rs1: reg_index_t, imm: bv64)
+    {
+        var imm_32: bv32;
+        var rs1_32: bv32;
+
+        imm_32 = bv_sign_extend(20, imm[11:0]);
+        rs1_32 = read_reg(rs1)[31:0];
+
+        call write_reg(rd, bv_sign_extend(32, rs1_32 & imm_32));
+    }
+
+    procedure addi(rd: reg_index_t, rs1: reg_index_t, imm: bv64)
+    {
+        var imm_32: bv32;
+        var rs1_32: bv32;
+
+        imm_32 = bv_sign_extend(20, imm[11:0]);
+        rs1_32 = read_reg(rs1)[31:0];
+
+        call write_reg(rd, bv_sign_extend(32, rs1_32 + imm_32));
+    }
+
+    procedure slliw(rd: reg_index_t, rs: reg_index_t, imm: bv64)
+    {
+        var imm_32: bv32;
+        var res_32: bv32;
+
+        imm_32 = bv_sign_extend(20, imm[11:0]);
+        res_32 = bv_left_shift(imm_32, regs[rs][31:0]);   // regs[rs] << imm_32
+        
+        call write_reg(rd, bv_sign_extend(32, res_32));
+    }
+
+    procedure addiw(rd: reg_index_t, rs1: reg_index_t, imm: bv64)
+    {
+        // var imm_32: bv32;
+        // var rs1_32: bv32;
+    
+        // imm_32 = bv_sign_extend(20, imm[11:0]);
+        // rs1_32 = read_reg(rs1)[31:0];
+
+        // call write_reg(rd, bv_sign_extend(32, rs1_32 + imm_32));
+        call isa_addi(rd, rs1, imm);
+    }
+
+    procedure ld(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        call march_load(rd, rs, offset);
+    }
+
+    procedure lw(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        call march_load(rd, rs, offset);
+    }
+
+    procedure lbu(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        call march_load(rd, rs, offset);
+    }
+
+    procedure load(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        call march_load(rd, rs, offset);
+    }
+
+    procedure sd(rs: reg_index_t, rd: reg_index_t, offset: word_t)
+    {
+        call march_store(rs, rd, offset);
+    }
+
+    procedure sw(rs: reg_index_t, rd: reg_index_t, offset: word_t)
+    {
+        call march_store(rs, rd, offset); 
+    }
+
+    procedure sb(rs: reg_index_t, rd: reg_index_t, offset: word_t)
+    {
+        call march_store(rs, rd, offset);
+    }
+
+    procedure store(rs: reg_index_t, rd: reg_index_t, offset: word_t)
+    {
+        call march_store(rs, rd, offset);
+    }
+
+    procedure bgeu(rs1: reg_index_t, rs2: reg_index_t, t1: addr_t)
+    {
+        call isa_bge(rs1, rs2, t1, pc+4bv64);
+    }
+
+    procedure bge(rs1: reg_index_t, rs2: reg_index_t, t1: addr_t)
+    {
+        call isa_bge(rs1, rs2, t1, pc+4bv64);
+    }
+
+    procedure jal(rd: reg_index_t, target: addr_t) {
+        var hit: boolean;
+        var guess: addr_t;
+
+        // FIXME: rd not used
+
+        // guess a target
+        call (hit) = btb_update_pc_cond();
+
+        if (hit) {
+            call btb_update_pc();
+        } else {
+            call write_pc(target);
+        }
+    }
+
+    procedure jalr(rd: reg_index_t, rs: reg_index_t, target: addr_t) {
+        var hit: boolean;
+        var guess: addr_t;
+
+        // FIXME: rd not used
+
+        // guess a target
+        call (hit) = btb_update_pc_cond();
+
+        if (hit) {
+            call btb_update_pc();
+        } else {
+            call write_pc(target);
+        }
+    }
+}

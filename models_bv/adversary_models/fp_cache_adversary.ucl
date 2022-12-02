@@ -1,0 +1,134 @@
+module common {
+    /*  Adversary observations modeled as an uninterpreted type
+     */
+    type observations_t;
+
+    /*  Adversary inputs
+     */
+    type adv_input_t = record {
+        addr: addr_t,
+        fpri: reg_index_t
+    };
+
+    /*  Constants for adversary state related types
+     */
+    const const_observations: observations_t;
+
+    /*  Takes in all observations and returns a UT
+     */
+	function observe_hit(hit: boolean, obs: observations_t): observations_t;
+
+    /* Adversary operations type
+     */
+    type adv_op_t = enum {
+        tamper_op,
+        read_cache_op,
+        read_fp_op
+    };
+}
+
+module platform {
+
+	/*  Adversary observations	
+	 */
+	var observations: observations_t;
+	var observations_taint: boolean;
+    
+    /* Adversary operations
+     */
+    input adv_op: adv_op_t;
+
+	/*	Adversary inputs (constrained to be the same across all traces)
+	 */
+	input adv_input: adv_input_t;
+
+	/*	Initial state of the adversary.
+	 */
+	procedure init_adv_state()
+	{
+		observations = const_observations;
+		observations_taint = false;
+	}
+
+    // ========================================================================================= //
+    // TAMPER FUNCTIONS
+
+	/*	Tamper function during advesary execution.
+	 */
+	procedure adv_tamper()
+	{
+		skip;
+	}
+
+    // ========================================================================================= //
+    // OBSERVATION FUNCTIONS
+
+	/*	Inter-instruction observation function.
+	 *
+	 *  Reads the cache at the address `addr`.
+	 */
+	// procedure adv_obs_inter_inst()
+	// {
+	// 	var hit_: boolean;
+	// 	var _: word_t;
+		
+	// 	call (hit_, _) = read_vi_cache(adv_input.addr);
+	// 	observations = observe_hit(hit_, observations);
+	// }
+
+	procedure adv_obs_inter_inst()
+	{
+	}
+
+
+	/*	Observation function during adversary execution.
+	 *
+	 *  Reads the cache at the address `addr`.
+	 */
+	procedure adv_read_cache()
+	{
+		var hit_: boolean;
+		var taint: boolean;
+
+		// adversary at least needs to obey address mapping
+		call (hit_, taint) = cache_observe(adv_input.addr, addr_map[adv_input.addr]);
+		observations = observe_hit(hit_, observations);
+		observations_taint = taint || observations_taint;
+	}
+
+    // ========================================================================================= //
+    // ADVERSARY EXECUTION FUNCTION(S)
+
+    /*  Victim function called to load secret into the xmm0 register
+     */
+    procedure adv_read_fp()
+    {
+        // movq rax, fpri
+        call mov(rax, adv_input.fpri);
+        // and rax, 1
+        call andi(rax, rax, 1bv64);
+        // shl rax, 6
+        call muli(rax, rax, 6bv64);
+        // mov dword [mem+rax], 0
+        call store(zero, rax, 0bv64);
+    }
+    
+    /*	Adversary execution
+
+		Passive adversary that only reads the cache when it executes.
+	 */
+	procedure adv_execute()
+	{
+        case
+            (adv_op == tamper_op): {
+		        call adv_tamper();
+            }
+            (adv_op == read_cache_op): {
+		        call adv_read_cache();
+            }
+            (adv_op == read_fp_op): {
+                call adv_read_fp();
+            }
+        esac
+    }
+}

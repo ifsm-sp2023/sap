@@ -1,0 +1,246 @@
+module common {
+    /*  Page table types
+     */
+    type pt_perm_t = record {
+        perm: perm_t,
+        present_bit: boolean
+    };
+    type addr_perm_t = [addr_t]pt_perm_t;
+    type addr_map_t = [vaddr_t]addr_t;
+    type owner_t = [vaddr_t]process_id_t;
+
+    /*  Constants
+     */
+    const const_addr_perm: addr_perm_t;
+    const const_addr_map: addr_map_t;
+    const const_owner: owner_t;
+}
+
+/*	Abstract model of page tables.
+ *  
+ *  The legacy page table contains two maps.
+ *  (1) An owner map that determines ownership of pages and
+ *  (2) a permission map
+ */
+module platform {
+    // ========================================================================================= //
+    // MICRO-ARCHITECTURE STATE
+
+    /*  Whether paging is enabled
+     */
+    var virtualization: boolean;
+
+    /*  Legacy page table permission map
+     */
+    var addr_perm: addr_perm_t;
+
+    /*  Legacy virtual to physical address map
+     */
+    var addr_map: addr_map_t;
+
+    /*  Owner of each page
+     */
+    var owner: owner_t;
+
+    // ========================================================================================= //
+    // INITIALIZATION
+
+    procedure initialize_pt()
+    {
+        addr_perm = const_addr_perm;
+        addr_map = const_addr_map;
+        owner = const_owner;
+    }
+
+    // ========================================================================================= //
+    // HELPERS
+
+    /*  Return the owner of the page.
+     */
+    define page_owner(addr: addr_t): process_id_t = owner[addr];
+
+    /*  Returns the memory read permissions for the given address `a`.
+     */
+    define r_perm(a: addr_t): boolean = addr_perm[a].perm.r;
+
+    /*  Returns the memory write permissions for the given address `a`.
+     */
+    define w_perm(a: addr_t): boolean = addr_perm[a].perm.w;
+
+    /*  Returns the memory execute permissions for the given address `a`.
+     */
+    define x_perm(a: addr_t): boolean = addr_perm[a].perm.x;
+
+    /*  Returns the present bit of the page table for address `a`.
+     */
+    define p_bit(a: addr_t): boolean = addr_perm[a].present_bit;
+
+    /*  Returns whether the page at address `a` is owned by an enclave.
+     */
+    define enclave_owned(a: addr_t): boolean = is_enclave(owner[a]);
+
+    /*  Predicate that states a low virtual address is a low physical address.
+     */
+    define lo_translate_vaddr(va: vaddr_t): boolean = (lo_vaddr(va) ==> lo_addr(addr_map[va]));
+
+    /*  Returns the physical address translation of `va`.
+     */
+    procedure translate_vaddr(va: vaddr_t)
+        returns (a: addr_t)
+    {
+        assume (addr_map[secret_vaddr] == secret_addr);
+        a = if (virtualization) then (addr_map[va]) else va;
+    }
+
+    /*  Returns the physical address translation of `va`
+
+    /*  Do a legacy page table walk and throw page fault if
+     *   (1) present bit is not set in legacy page table
+     *   (2) read permission not passed in legacy page table
+     *   (3) page is not owned by the current PID
+     */
+    procedure pt_walk(vaddr: vaddr_t, access_bit: boolean)
+        returns (addr: addr_t)
+    {
+
+        var present_bit: boolean;
+
+        // get the present bit
+        present_bit = p_bit(vaddr);
+    
+        // check if the page is in the page table (using the present bit) and check for read permission
+        if ((!present_bit || !access_bit) && get_excp() == none) {
+            call set_excp(fault);
+        }
+
+        // return the physical address
+        call (addr) = translate_vaddr(vaddr);
+    }
+
+    /*  Do a extended page table walk (which includes the legacy page table walk)
+     *
+     *  Page fault: Thrown if the conditions in pt_walk are satisfied
+     *   
+     *  Abort page semantics: Thrown if present bit is set and 
+     *  
+     */
+    procedure ept_walk(vaddr: vaddr_t, access_bit: boolean)
+        returns (addr: addr_t)
+    {
+        var present_bit: boolean;
+
+        // get the present bit
+        present_bit = p_bit(vaddr);
+
+        // do the regular page walk first
+        call (addr) = pt_walk(vaddr, access_bit);
+
+        // if it passes the regular page walk, also check that the enclave memory is accessible
+        // 
+        // throw abort page semnatics if
+        // (1) the present bit is set
+        // (2) the page is enclave owned
+        // (3) but the page is not owned by the current executing PID / enclave
+        if (present_bit && enclave_owned(vaddr) && page_owner(vaddr) != pid()) {
+            call set_excp(abort_page_semantics);
+        }
+    }
+
+    // ========================================================================================= //
+    // HARNESSES
+
+    procedure pt_read_translate_vaddr(vaddr: vaddr_t)
+        returns (a: addr_t)
+    {
+        var rperm: boolean;
+        var addr: addr_t;
+
+        // compute address
+        assume (lo_translate_vaddr(vaddr));
+
+        // get read permission for virtual address
+        rperm = r_perm(vaddr);
+
+        call (a) = pt_walk(vaddr, rperm);
+    }
+
+    procedure pt_write_translate_vaddr(vaddr: vaddr_t)
+        returns (a: addr_t)
+    {
+        var wperm: boolean;
+        var addr: addr_t;
+
+        // compute address
+        assume (lo_translate_vaddr(vaddr));
+
+        // get read permission for virtual address
+        wperm = w_perm(vaddr);
+
+        call (a) = pt_walk(vaddr, wperm);
+    }
+
+    procedure ept_read_translate_vaddr(vaddr: vaddr_t)
+        returns (a: addr_t)
+    {
+        var rperm: boolean;
+        var addr: addr_t;
+
+        // compute address
+        assume (lo_translate_vaddr(vaddr));
+
+        // get read permission for virtual address
+        rperm = r_perm(vaddr);
+
+        call (a) = ept_walk(vaddr, rperm);
+    }
+
+    procedure ept_write_translate_vaddr(vaddr: vaddr_t)
+        returns (a: addr_t)
+    {
+        var wperm: boolean;
+        var addr: addr_t;
+
+        // compute address
+        assume (lo_translate_vaddr(vaddr));
+
+        // get read permission for virtual address
+        wperm = w_perm(vaddr);
+
+        call (a) = ept_walk(vaddr, wperm);
+    }
+}
+
+/*  
+ */
+module platform {
+    /*  Read the register value at index `ri`
+     */
+    procedure read_mem(vaddr: vaddr_t)
+    	returns (res: word_t, taint: boolean)
+    {
+        var addr: addr_t;
+
+        {
+        var tlbrc: boolean;
+        call (tlbrc) = tlb_read_translate_vaddr_cond(vaddr);
+
+        case
+            (tlbrc): {
+                // try to read from the TLB
+                call (addr) = tlb_translate_vaddr(vaddr);
+            }
+            default: {
+                // if there's a TLB miss, try to read from the page tables
+                call (addr) = ept_read_translate_vaddr(vaddr);
+            }
+        esac
+        }
+        
+        assume (lo_translate_vaddr(vaddr));
+
+        taint = get_mem_taint(addr);
+    	res = mem[addr];
+    }
+
+    define get_mem_taint(a: addr_t): boolean = (a == secret_addr);
+}

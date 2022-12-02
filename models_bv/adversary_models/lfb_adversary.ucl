@@ -1,0 +1,113 @@
+module common {
+    /*  Adversary observations modeled as an uninterpreted type
+     */
+    type observations_t;
+
+    /* Adversary operations type
+     */
+    type adv_op_t = enum {
+        tamper_op,
+        read_cache_op
+    };
+
+    /*  Adversary inputs
+     */
+    type adv_input_t = record {
+        addr: addr_t
+    };
+
+    /*  Constants for adversary state related types
+     */
+    const const_observations: observations_t;
+
+    /*  Takes in all observations and returns a UT
+     */
+	function observe_hit(hit: boolean, obs: observations_t): observations_t;
+}
+
+module platform {
+
+	/*  Adversary observations	
+	 */
+	var observations: observations_t;
+	var observations_taint: boolean;
+
+    /* Adversary operations
+     */
+    input adv_op: adv_op_t;
+
+	/*	Adversary inputs (constrained to be the same across all traces)
+	 */
+	input adv_input: adv_input_t;
+
+	/*	Initial state of the adversary.
+	 */
+	procedure init_adv_state()
+	{
+		observations = const_observations;
+		observations_taint = false;
+	}
+
+    // ========================================================================================= //
+    // TAMPER FUNCTIONS
+
+	/*	Tamper function during advesary execution.
+	 */
+	procedure adv_tamper()
+	{
+		skip;
+	}
+
+    // ========================================================================================= //
+    // OBSERVATION FUNCTIONS
+
+	/*	Inter-instruction observation function.
+	 *
+	 *  Reads the cache at the address `addr`.
+	 */
+	// procedure adv_obs_inter_inst()
+	// {
+	// 	var hit_: boolean;
+	// 	var _: word_t;
+		
+	// 	call (hit_, _) = read_vi_cache(adv_input.addr);
+	// 	observations = observe_hit(hit_, observations);
+	// }
+
+	procedure adv_obs_inter_inst()
+	{
+	}
+
+	/*	Observation function during adversary execution.
+	 *
+	 *  Reads the cache at the address `addr`.
+	 */
+	procedure adv_read_cache()
+	{
+		var hit_, taint: boolean;
+		
+		call (hit_, taint) = lfb_hit(adv_input.addr);
+		observations = observe_hit(hit_, observations);
+		observations_taint = taint || observations_taint;
+	}
+
+    // ========================================================================================= //
+    // ADVERSARY EXECUTION FUNCTION(S)
+
+	/*	Adversary execution
+
+		Passive adversary that only reads the cache when it executes.
+	 */
+	procedure adv_execute()
+	{
+        havoc adv_op;
+        case
+            (adv_op == tamper_op): {
+		        call adv_tamper();
+            }
+            (adv_op == read_cache_op): {
+		        call adv_read_cache();
+            }
+        esac
+    }
+}

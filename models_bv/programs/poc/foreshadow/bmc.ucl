@@ -1,0 +1,40 @@
+module platform {
+    next {
+        call choose_process();
+        case
+            (pc == A_ADDR && pid() == VICTIM_PID): {
+                call blockA();
+            }
+            (pid() == ADVERSARY_PID): {
+                call adv_execute();
+            }
+            default: {
+                skip;
+            }
+        esac
+    }
+}
+
+module main {
+    control {
+        // set_solver_option(":mbqi", false);
+        set_solver_option(":case_split", 0);
+        set_solver_option(":relevancy", 0);
+        set_solver_option(":threads", 8);
+        set_solver_option(":blast_full", true);
+
+        v = bmc(2);
+        check;
+        print_results;
+        v.print_cex(
+            // p1.pc, p2.pc,
+            // p1.excp, p2.excp,
+            // p1.observations, p2.observations,
+            // p1.cache, p2.cache,
+            // p1.cache == p2.cache,
+            // p1.adv_input, p2.adv_input,
+            // p1.cpid, p2.cpid,
+            // secret_addr
+        );
+    }
+}

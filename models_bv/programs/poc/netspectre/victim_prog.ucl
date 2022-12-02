@@ -1,0 +1,72 @@
+module common {
+    const zero: reg_index_t = 0bv5;
+    const r0:   reg_index_t = 1bv5;
+    const r1:   reg_index_t = 2bv5;
+    const r2:   reg_index_t = 3bv5;
+    const r3:   reg_index_t = 4bv5;
+    const r4:   reg_index_t = 5bv5;
+    const r5:   reg_index_t = 6bv5;
+    const sp:   reg_index_t = 7bv5;    // stack pointer
+    const gp:   reg_index_t = 8bv5;    // global pointer
+
+    const A_ADDR: addr_t = 1000bv64;
+    const B_ADDR: addr_t = 2000bv64;
+    const C_ADDR: addr_t = 3000bv64;
+    const D_ADDR: addr_t = 4000bv64;
+}
+
+module platform {
+    procedure blockA()
+    {
+        // assume that r0 == x, r1 == array1_size
+        call bge(r0, r1, D_ADDR, B_ADDR);    // if (x >= array1_size) goto END else ADDR_B
+    }
+
+    procedure blockB()
+    {
+        // r3 = &array = &vmem[gp-100]
+        // call addi(r3, gp, -100bv64);
+        
+        // r3 = array
+        // call load(r3, r3, 0bv64);
+
+        // r3 = array + x
+        call add(r4, r3, r0);
+        assume (regs[r4] == secret_vaddr);
+        assume (addr_map[regs[r4]] == secret_addr);
+        
+        // r0 = array[x]
+        // regs[r5] = mem[addr_map[regs[r4]]];
+        call load(r5, r4, 0bv64);
+
+        // assume that r4 == array[x], r2 == y
+        if (regs[r5] < regs[r2]) {
+            pc = D_ADDR;
+        } else {
+            pc = C_ADDR;
+        }
+        // call bge(r5, r2, D_ADDR, C_ADDR);    // if (array[2]x >= y) goto END else ADDR_B
+    }
+
+    procedure blockC()
+    {
+        call __mm256_instruction__();
+    }
+
+    /*  Set the initial PC
+     */
+    axiom pc_init == A_ADDR;
+
+    /*  Ignore all exceptions.
+     */
+    axiom get_excp() == none;
+
+    procedure platform_init_assumptions() {
+        call setup_bmc_init_assumptions();
+        call initialize_power_channel();
+    }
+}
+
+module main {
+    procedure main_init_assumptions() {}
+}

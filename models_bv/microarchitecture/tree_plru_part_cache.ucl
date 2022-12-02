@@ -1,0 +1,195 @@
+/*	This file models a way-partitioned cache the use of shared metadata information.
+ *
+ *  FIXME: This implementation "fixes" spectre when it should not due to shared metadata. Figure out where this si going wrong. 
+ */
+module common {
+    /*  Map from process ID and address to cache line.
+     */
+    type line_idx_t = record {
+    	id: process_id_t,
+    	a: addr_t
+    };
+
+    /*  Cache hit map from address to cache line.
+     *  Each address is mapped to its own cache line
+     *  which consists of a 2-level PLRU metadata tree.
+     */
+    type cache_t = [addr_t]tree_cache_layer1_t;
+
+    /*  Cache Tree-PLRU Metadata (layer 1)
+     */
+    type tree_cache_layer1_t = record {
+        dir: boolean,
+        tcl2: [boolean]tree_cache_layer2_t
+    };
+
+    /*  Cache Tree-PLRU Metadata (layer 2)
+     */
+    type tree_cache_layer2_t = record {
+        dir: boolean,
+        cache_line: [boolean]boolean
+    };
+
+    /*  Way ownership map
+     */
+    type way_owner_t = [boolean][boolean]process_id_t;
+
+    /*  Cache hit map constant
+     */
+    const const_cache_hit_map: cache_t;
+
+    /*  Tree-PLRU cache constant
+     */
+    const const_tree_cache_layer1: tree_cache_layer1_t;
+
+    /*  Tree-PLRU way owner map that indicates which process owns a particular way of this (4-way) cache 
+     */
+    const const_way_owner: way_owner_t;
+}
+
+module platform {
+    // ========================================================================================= //
+    // CACHE STATE VARIABLES
+
+    /*  Cache hit map.
+     *
+     *  This simple cache model only models a hit map. Cache lines exists but
+     *  reading from them would be semantically no different than reading from memory in this model.
+     */
+    var cache_hit_map: cache_t;
+
+    /*  Owner map for cache ways.
+     */
+    var way_owner: way_owner_t;
+
+    // ========================================================================================= //
+    // AXIOMS 
+
+    /*  Ownership assumption; OS owns first three and victim owns the last way.
+     */
+    axiom way_owner[true][true] == ADVERSARY_PID;
+    axiom way_owner[false][true] == ADVERSARY_PID;
+    axiom way_owner[true][false] == ADVERSARY_PID;
+    axiom way_owner[false][false] == VICTIM_PID;
+
+    // ========================================================================================= //
+    // CACHE HELPERS
+
+    /*  Set the cache state to some constant
+     */
+    procedure [inline] set_const_cache_state()
+    {
+        cache_hit_map = const_cache_hit_map;
+        way_owner = const_way_owner;
+    }
+
+    /*  Returns whether the cache line is a hit or miss
+     */
+    define way_hit(tcl1: tree_cache_layer1_t): boolean =
+        tcl1.tcl2[true].cache_line[true] ||
+        tcl1.tcl2[true].cache_line[false] ||
+        tcl1.tcl2[false].cache_line[true] ||
+        tcl1.tcl2[false].cache_line[false];
+
+    /*  Set the cache line and update the metadata if there's an eviction.
+     */
+    procedure [inline] set_cache(addr: addr_t, hit: boolean)
+    {
+        var dir1, dir2: boolean;
+
+        // retrieve pointers for the metadata
+    	dir1 = cache_hit_map[addr].dir;
+        dir2 = cache_hit_map[addr].tcl2[dir1].dir;
+
+        // if there's a cache hit, we don't need to update the address.
+        // otherwise, flip boolean values on the tree path.
+        // FIXME: this only updates if the way pointed to is owned by the current pid()
+        if (!way_hit(cache_hit_map[addr]) && way_owner[dir1][dir2] == pid()) {
+            var tmp_l1: tree_cache_layer1_t;
+            var tmp_l2: tree_cache_layer2_t;
+            var tmp_cl: [boolean]boolean;
+
+            // first flip the second layer
+            tmp_l2.dir = !dir2;
+            
+            // then update the hit value (corresponds to fetch and eviction)
+            tmp_cl = cache_hit_map[addr].tcl2[dir1].cache_line;
+            tmp_l2.cache_line = tmp_cl[dir2 -> hit];
+
+            // update the first layer's second layer
+            tmp_l1.tcl2 = cache_hit_map[addr].tcl2[dir1 -> tmp_l2];
+            
+            // then flip the first layer
+            tmp_l1.dir = !dir1;
+
+            // update first layer
+            cache_hit_map[addr] = tmp_l1;
+        }
+    }
+
+    /*  Read the cache line.
+     */
+    procedure [inline] read_cache(addr: addr_t)
+    	returns (hit: boolean, val: word_t)
+    {
+        var dir1, dir2: boolean;
+
+        // index into way and get the hit value
+        hit = way_hit(cache_hit_map[addr]);
+        
+        // assume dir1 and dir2 points to the correct way that is a hit
+        // this is used to check that the pid owns the way
+        assume (hit ==> cache_hit_map[addr].tcl2[dir1].cache_line[dir2]);
+    	
+        // if it's a hit and the way owner is enable
+        if (hit && way_owner[dir1][dir2] == pid()) {
+            call (val) = read_mem(addr);
+    	} else {
+            val = 0;
+    	}
+    }
+
+    /*  Read the cache line from a virtually indexed cache.
+     */
+    procedure read_vi_cache(vaddr: addr_t)
+        returns (hit: boolean, val: word_t)
+    {
+        var dir1, dir2: boolean;
+        var addr: addr_t;
+
+        // translate the address
+        call (addr) = translate_vaddr(vaddr);
+
+        // index into way and get the hit value
+        hit = way_hit(cache_hit_map[vaddr]);
+        
+        // assume dir1 and dir2 points to the correct way that is a hit
+        // this is used to check that the pid owns the way
+        assume (hit ==> cache_hit_map[vaddr].tcl2[dir1].cache_line[dir2]);
+    	
+        // if it's a hit and the way owner is enable
+        if (hit && way_owner[dir1][dir2] == pid()) {
+            call (val) = read_mem(addr);
+    	} else {
+            val = 0;
+    	}
+    }
+
+    /*   Testing procedures
+     */
+    procedure test_set_read()
+    {
+        var addr: addr_t;
+        var hit: boolean;
+        var val: word_t;
+        call set_cache(addr, true);
+        call (hit, val) = read_cache(addr);
+        assert (hit);
+    }
+
+    control {
+        tsr = verify(test_set_read);
+        check;
+        print_results;
+    }
+}

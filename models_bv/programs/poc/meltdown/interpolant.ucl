@@ -1,0 +1,68 @@
+module platform {
+    next {
+        call choose_process();
+        case
+            (pc == A_ADDR && pid() == VICTIM_PID): {
+                call blockA();
+            }
+            (pc == B_ADDR && pid() == VICTIM_PID): {
+                call blockB();
+            }
+            (pid() == ADVERSARY_PID): {
+                call adv_execute();
+            }
+            default: {
+                skip;
+            }
+        esac
+    }
+}
+
+module platform {
+
+    procedure check_blockA()
+        ensures interpolant1();
+    {
+        call platform_init_assumptions();
+        call blockA();
+    }
+
+    define interpolant1(): boolean = 
+        !regs_taint[rcx] &&
+        !regs_taint[rbx] &&
+        !observations_taint;
+
+    procedure check_blockB()
+        requires interpolant1();
+        ensures interpolant2();
+    {
+        call blockB();
+    }
+
+    define interpolant2(): boolean = 
+        !observations_taint;
+
+    procedure check_adversary_end()
+        requires interpolant2();
+        ensures interpolant3();
+    {
+        call adv_execute();
+    }
+
+    define interpolant3(): boolean =
+        !observations_taint;
+
+    control {
+        // set_solver_option(":mbqi", false);
+        set_solver_option(":case_split", 0);
+        set_solver_option(":relevancy", 0);
+        set_solver_option(":threads", 8);
+        set_solver_option(":blast_full", true);
+
+        i1 = verify(check_blockA);
+        i2 = verify(check_blockB);
+        i3 = verify(check_adversary_end);
+        check;
+        print_results;
+    }
+}

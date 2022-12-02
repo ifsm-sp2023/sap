@@ -1,0 +1,167 @@
+module common {
+    /*  Map from address to cache line hit value.
+     */
+    type line_idx_t = record {
+        set: set_t,
+        way: way_t
+    };
+    type data_line_t = record {
+        tag: addr_t,
+        valid: boolean
+    };
+    type cache_t = [line_idx_t]data_line_t;
+    type cache_taint_t = [line_idx_t]boolean;
+
+    /*  Address to index and way/tag
+     *
+     *  The get way function is assumed to partition by process ID
+     */
+    type set_t;
+    type way_t;
+    function get_set_index(addr: addr_t): set_t;
+    function get_way(addr: addr_t): way_t;
+
+    /*  Constant cache hit value
+     */
+    const const_cache: cache_t;
+}
+
+module platform {
+    // ========================================================================================= //
+    // CACHE STATE VARIABLES
+
+    /*  Cache hit map.
+     *
+     *  This simple cache model only models a hit map. Cache lines exists but
+     *  reading from them would be semantically no different than reading from memory in this model.
+     */
+    var cache: cache_t;
+
+    /*  Cache hit address taint map.
+     *
+     *  Note that this taint map only refers to the taint of the addresses.
+     */
+    var cache_taint_addr: cache_taint_t;
+    var cache_taint_data: cache_taint_t;
+
+    // ========================================================================================= //
+    // CACHE HELPERS
+
+    /*  Set the cache state to some constant
+     */
+    procedure set_const_cache_state()
+    {
+        cache = const_cache;
+        cache_taint_addr = const(false, cache_taint_t);
+        cache_taint_data = const(false, cache_taint_t);
+    }
+
+    /*  Set the cache line.
+     */
+    procedure set_cache(vaddr: vaddr_t, addr: addr_t, valid: boolean, addr_taint: boolean, data_taint: boolean)
+    {
+        var lidx: line_idx_t;
+
+        // update the cache with virtual tag
+        lidx.set = get_set_index(vaddr);
+        lidx.way = get_way(vaddr);
+        
+        // update the cache with physical tag
+        {
+        var dl: data_line_t;
+        dl.tag = addr;
+        dl.valid = valid;
+        cache_taint_addr[lidx] = addr_taint;
+        cache_taint_data[lidx] = data_taint;
+        cache[lidx] = dl;
+        }
+    }
+
+    /*  Returns the value of the cache line given an address using VIPT.
+     */
+    procedure cache_hit(vaddr: vaddr_t, addr: addr_t)
+        returns (res: boolean, taint: boolean)
+    {
+        var lidx: line_idx_t;
+
+        // compute the set index and way
+        lidx.set = get_set_index(vaddr);
+        lidx.way = get_way(vaddr);
+
+        // return hit or miss based on the cache taint value
+        res = (cache[lidx].valid && cache[lidx].tag == addr);
+        taint = cache_taint_data[lidx];
+    }
+
+    /*  Returns the value of the cache line given an address using VIPT.
+     *  Note that this version only returns the taint of the address portion
+     */
+    procedure cache_observe(vaddr: vaddr_t, addr: addr_t)
+        returns (res: boolean, taint: boolean)
+    {
+        var lidx: line_idx_t;
+
+        // compute the set index and way
+        lidx.set = get_set_index(vaddr);
+        lidx.way = get_way(vaddr);
+
+        // return hit or miss based on the cache taint value
+        res = (cache[lidx].valid && cache[lidx].tag == addr);
+        taint = cache_taint_addr[lidx];
+    }
+
+
+    // ========================================================================================= //
+    // HARNESSES
+
+    /*  Condition for reading the cache line.
+     */
+    procedure read_cache_cond(rs: reg_index_t, offset: word_t)
+        returns (res: boolean)
+    {
+        var vaddr, addr: addr_t;
+        var lidx: line_idx_t;
+
+        // compute virtual and physical address
+        vaddr = read_reg(rs) + offset;
+        call (addr) = translate_vaddr(vaddr);
+        assume (lo_translate_vaddr(vaddr));
+
+        // return hit or miss
+        {
+        var taint: boolean;
+        call (res, taint) = cache_hit(vaddr, addr);
+        }
+    }
+
+    /*  Read the cache data.
+        The abstraction simply returns the value in memory assuming cache coherence.
+     */
+    procedure read_cache(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        var vaddr, addr: addr_t;
+        var val: word_t;
+
+        // compute virtual and physical address
+        vaddr = read_reg(rs) + offset;
+    
+        // update the register
+        {
+        var taint: boolean;
+        call (val, taint) = read_mem(vaddr);
+        call write_reg(rd, val, taint);
+        }
+    }
+
+    procedure update_cache(vaddr: addr_t, addr_taint: boolean, data_taint: boolean)
+    {
+        var addr: addr_t;
+
+        // compute virtual and physical address
+        call (addr) = translate_vaddr(vaddr);
+        assume (lo_translate_vaddr(vaddr));
+
+        // update cache on access
+        call set_cache(vaddr, addr, true, addr_taint, data_taint);
+    }
+}

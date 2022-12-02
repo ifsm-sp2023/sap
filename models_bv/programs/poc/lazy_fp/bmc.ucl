@@ -1,0 +1,69 @@
+module platform {
+    next {
+        call choose_process();
+        case
+            (pc == A_ADDR && pid() == VICTIM_PID): {
+                call blockA();
+            }
+            (pc == B_ADDR && pid() == VICTIM_PID): {
+                call blockB();
+            }
+            (pid() == ADVERSARY_PID): {
+                call adv_execute();
+            }
+            default: {
+                skip;
+            }
+        esac
+    }
+}
+
+module main {
+    control {
+        // set_solver_option(":mbqi", false);
+        set_solver_option(":case_split", 0);
+        set_solver_option(":relevancy", 0);
+        set_solver_option(":threads", 8);
+        set_solver_option(":blast_full", true);
+
+        v = bmc(3);
+        check;
+        print_results;
+        // v.print_cex(
+            // p1.mem[secret_addr], p2.mem[secret_addr],
+            // p1.pc, p2.pc,
+            // p1.adv_op, p2.adv_op,
+            // p1.regs[xmm0], p2.regs[xmm0],
+            // p1.regs[rax], p2.regs[rax],
+            // p1.regs[rbx], p2.regs[rbx],
+            // p1.regs[rcx], p2.regs[rcx],
+            // p1.excp, p2.excp,
+            // p1.observations, p2.observations,
+            // p1.cache, p2.cache,
+            // p1.cache == p2.cache,
+            // p1.adv_input, p2.adv_input,
+            // p1.cpid, p2.cpid,
+            // p1.cpid == VICTIM_PID,
+            // adv_op,
+            // secret_addr
+            // p.adv_op,
+            // p.adv_input,
+            // p.pc,
+            // p.regs[xmm0],
+            // p.regs_taint[xmm0],
+            // p.regs[rax],
+            // p.regs_taint[rax],
+            // p.regs[rbx],
+            // p.regs_taint[rbx],
+            // p.regs[rcx],
+            // p.regs_taint[rcx],
+            // p.excp,
+            // p.observations,
+            // p.cpid == VICTIM_PID,
+            // secret_addr,
+            // p.cache,
+            // p.cache_taint_addr,
+            // p.cache_taint_data
+        // );
+    }
+}

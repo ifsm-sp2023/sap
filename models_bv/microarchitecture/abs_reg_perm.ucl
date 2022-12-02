@@ -1,0 +1,22 @@
+module common {
+    /*  The end of the public registers range
+     */
+    const REG_PUBLIC_END: bv5;
+}
+
+module platform {    
+    /*  Returns whether there is read and write access to the given registers
+     */
+    procedure reg_perm(rd: reg_index_t, rs: reg_index_t)
+        returns (res: boolean)
+    {
+        res = (pid() != VICTIM_PID) ==> (rd < REG_PUBLIC_END && rs < REG_PUBLIC_END);
+    }
+
+    /*  Sets the #NM exception
+     */
+    procedure reg_nm()
+    {
+        call set_excp(device_not_available);
+    }
+}

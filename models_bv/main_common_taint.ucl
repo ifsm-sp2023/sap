@@ -1,0 +1,31 @@
+module main {
+	/* Adversary input and operation
+	 */
+	var adv_input: adv_input_t;
+	var adv_op: adv_op_t;
+
+	/* 	Create two traces of the platform
+	 */
+	instance p: platform(adv_input: (adv_input),
+	 					 adv_op: (adv_op));
+
+	/* 	Prove that the obervations are the same
+	 */
+	invariant obs_same: (p.cpid == ADVERSARY_PID) ==> !p.observations_taint;
+
+	/*	Step counter used for debugging
+	 */
+	var step: bv5;
+
+	init {
+		step = 0bv5;
+		call main_init_assumptions();
+	}
+
+	next {
+		havoc adv_op;
+		havoc adv_input;
+		step' = step + 1bv5;
+		next(p);
+	}
+}

@@ -1,0 +1,107 @@
+module common {
+    /*  Map from address to cache line hit value.
+     */
+    type line_idx_t = record {
+        set: set_t,
+        way: way_t
+    };
+    type data_line_t = record {
+        tag: addr_t,
+        hit: boolean
+    };
+    type cache_t = [line_idx_t]data_line_t;
+
+    /*  Address to index and way/tag
+     *
+     *  The get way function is assumed to partition by process ID
+     */
+    type set_t;
+    type way_t;
+    function get_set_index(addr: addr_t): set_t;
+    function get_way(addr: addr_t): way_t;
+
+    /*  Constant cache hit value
+     */
+    const const_cache_hit_map: cache_t;
+}
+
+module platform {
+    // ========================================================================================= //
+    // CACHE STATE VARIABLES
+
+    /*  Cache hit map.
+     *
+     *  This simple cache model only models a hit map. Cache lines exists but
+     *  reading from them would be semantically no different than reading from memory in this model.
+     */
+    var cache_hit_map: cache_t;
+
+    // ========================================================================================= //
+    // CACHE HELPERS
+
+    /*  Set the cache state to some constant
+     */
+    procedure set_const_cache_state()
+    {
+        cache_hit_map = const_cache_hit_map;
+    }
+
+    /*  Set the cache line.
+     */
+    procedure set_cache(addr: addr_t, hit: boolean)
+    {
+        var lidx: line_idx_t;
+        lidx.set = get_set_index(addr);
+        lidx.way = get_way(addr);
+        
+        {
+        var dl: data_line_t;
+        dl.tag = addr;
+        dl.hit = hit;
+        cache_hit_map[lidx] = dl;
+        }
+    }
+
+    /*  Read the cache line.
+     */
+    procedure read_cache(addr: addr_t)
+        returns (hit: boolean, val: word_t)
+    {
+        var lidx: line_idx_t;
+        lidx.set = get_set_index(addr);
+        lidx.way = get_way(addr);
+
+        hit = cache_hit_map[lidx].hit && cache_hit_map[lidx].tag == addr;
+        if (hit) {
+            call (val) = read_mem(addr);
+        } else {
+            // check the lfb
+            call (hit, val) = read_lfb(addr);
+        }
+
+        // update the cache hit value
+        call set_cache(addr, true);
+    }
+
+    /*  Read the cache line from a virtually indexed cache.
+     */
+    procedure read_vi_cache(vaddr: addr_t)
+        returns (hit: boolean, val: word_t)
+    {
+        var lidx: line_idx_t;
+        lidx.set = get_set_index(vaddr);
+        lidx.way = get_way(vaddr);
+        hit = cache_hit_map[lidx].hit && cache_hit_map[lidx].tag == vaddr;
+        if (hit) {
+            var addr: addr_t;
+            call (addr) = translate_vaddr(vaddr);
+            call (val) = read_mem(addr);
+        } else {
+            // check the lfb
+            call (hit, val) = read_lfb(vaddr);
+        }
+
+        // update the cache hit value
+        call set_cache(vaddr, true);
+    }
+}

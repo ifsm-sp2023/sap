@@ -1,0 +1,30 @@
+module platform {
+    procedure setup_bmc_init_assumptions() {
+        // set the initial architecture state to constant values
+        call const_arch_state();
+
+        // initialize the cache
+        call set_const_cache_state();
+
+        // intiialize lfb state
+        call set_const_lfb_state();
+
+        // initialize the BTB
+        call set_const_btb_state();
+
+        // initialize the PHT
+        call set_const_pht_state();
+
+        // initialize the TLB
+        call initialize_tlb();
+
+        // initialize store buffer
+        call initialize_sb();
+
+        // initialize the page tables
+        call initialize_pt();
+
+        // initialize the adversary state
+        call init_adv_state();
+    }
+}

@@ -1,0 +1,29 @@
+module platform {
+	/*	Axioms over the secret address
+		- assume that the secret address is in some arbitrary address not close to the stack and global pointers
+		- assume that anything below sp is low equivalent
+		- assume that anything below the global pointer is low equivalent
+	 */
+	axiom (PUBLIC_RANGE_END == addr_map[PUBLIC_VRANGE_END]);
+	axiom (PUBLIC_RANGE_START == addr_map[PUBLIC_VRANGE_START]);
+	axiom (PUBLIC_RANGE_START <_u PUBLIC_RANGE_END);
+	axiom (PUBLIC_VRANGE_START <_u PUBLIC_VRANGE_END);
+	axiom (PUBLIC_VRANGE_END - PUBLIC_VRANGE_START == PUBLIC_RANGE_END - PUBLIC_RANGE_START);
+	
+	axiom (PUBLIC_RANGE_END <_u secret_addr);
+	axiom (read_reg(sp) <=_u PUBLIC_VRANGE_END);
+	axiom (read_reg(gp) <=_u PUBLIC_VRANGE_END);
+	axiom (read_reg(sp) >=_u PUBLIC_VRANGE_START);
+	axiom (read_reg(gp) >=_u PUBLIC_VRANGE_START);
+	axiom (PUBLIC_VRANGE_START <=_u read_reg(sp)-STACK_DEPTH);
+	axiom (PUBLIC_VRANGE_START <=_u read_reg(gp)-STACK_DEPTH);
+	axiom (PUBLIC_VRANGE_START >=_u STACK_DEPTH);
+
+	/*	Set the location `secret_addr` to high labelled (different across traces);
+	 */
+	procedure set_high_arch_comp()
+	{
+		var high_data: word_t;
+		mem[secret_addr] = high_data;
+	}
+}

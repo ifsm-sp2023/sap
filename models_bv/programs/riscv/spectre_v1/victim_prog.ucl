@@ -1,0 +1,65 @@
+module platform {
+    procedure block1()
+    {
+        // 65872: addi sp, sp, -32,
+        call addi(sp, sp, -32bv64);     // sp = sp - 32
+        // 65876: sd s0, sp, 24,
+        call sd(s0, sp, 24bv64);        // mem[sp+24] = s0
+        // 65880: addi s0, sp, 32,
+        call addi(s0, sp, 32bv64);      // s0 = sp + 32
+        // 65884: sd a0, s0, -24,
+        call sd(a0, s0, -24bv64);       // mem[s0-24] = a0 (= x)
+        // 65888: ld a5, gp, -160,
+        call ld(a5, gp, -160bv64);      // read array1_size
+        // 65892: ld a4, s0, -24,
+        // call ld(a4, s0, -24bv64);       // a4 = mem[s0-24] (= x)
+        //// 65896: bgeu a4, a5, 65956,
+        call branch(a4, a5, 65956bv64, 65900bv64);    // if (x >= array1_size) goto END else 65900
+    }
+
+    procedure block2()
+    {
+        // 65900: addi a4, gp, -136,
+        call addi(a4, gp, -136bv64);            // a4 = array1
+        // 65904: ld a5, s0, -24,
+        call ld(a5, s0, -24bv64);               // a5 = x
+        // 65908: add a5, a4, a5,
+        call add(a5, a4, a5);               // a5 = a4 + array1
+        // 65912: lbu a5, a5, 0,
+        call lbu(a5, a5, 0bv64);                // a5 = mem[a5] = array1[x]
+        // 65916: addiw a5, a5, 0,
+        call addiw(a5, a5, 0bv64);              // a5 = array1[x]
+        // 65920: slliw a5, a5, 9,
+        call slliw(a5, a5, 9bv64);              // a5 = array1[x] << 9
+        // 65924: addiw a4, a5, 0,
+        call addiw(a4, a5, 0bv64);              // a4 = array[x] << 9
+        // 65928: addi a5, gp, -128,
+        call addi(a5, gp, -128bv64);            // a5 = array2
+        // 65932: add a5, a4, a5,
+        call add(a5, a4, a5);               // a5 = array2 + (array1[x] << 9) = &array2[array1[x] << 9]
+        // 65936: lbu a4, a5, 0,
+        call lbu(a4, a5, 0bv64);                // a4 = array2[array1[x] << 9]
+        // 65940: lbu a5, gp, -127,
+        call lbu(a5, gp, -127bv64);             // a5 = tmp
+        // 65944: and a5, a4, a5,
+        call and(a5, a4, a5);               // a5 = tmp & array2[array[x] << 9]
+        // 65948: andi a4, a5, 255,
+        call andi(a4, a5, 255bv64);             // a5 = tmp & array2[array[x] << 9] & 255
+        // 65952: sb a4, gp, -127,
+        call sb(a4, gp, -127bv64);              // tmp = tmp & array2[array[x] << 9] & 255
+    
+        // advance pc
+        call write_pc(pc + 10bv64);
+    }
+
+    // set the initial PC
+    axiom pc_init == 65872bv64;
+
+    procedure platform_init_assumptions() {
+        call setup_bmc_init_assumptions();
+    }
+}
+
+module main {
+    procedure main_init_assumptions() {}
+}

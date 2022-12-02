@@ -1,0 +1,193 @@
+module common {
+    // ========================================================================================= //
+    // ARCHITECTURE STATE VARIABLE TYPES
+
+    // program counter
+    type pc_t = addr_t;
+
+    // entrypoints
+    const ADVERSARY_ENTRYPOINT: pc_t;
+
+    // register file and permissions
+    type regs_t = [reg_index_t]word_t;
+    type regs_taint_t  = [reg_index_t]boolean;
+    type reg_perm_t = [reg_index_t]perm_t;
+
+    // memory
+    type mem_t = [addr_t]word_t;
+    type mem_taint_t = [addr_t]boolean;
+
+    // process id
+    type process_id_t = bv3;
+
+    // process id constants
+    const ADVERSARY_PID: process_id_t;
+    const VICTIM_PID: process_id_t;
+
+    // mode
+    // TODO: remove if not used
+    type mode_t = enum {
+        os,
+        enclave,
+        victim
+    };
+
+    // exception
+    type excp_t = enum {
+        none,
+        fault,
+        abort_page_semantics,
+        device_not_available
+    };
+
+    // enclave status is either active or inactive represented by a boolean flag
+    type enclave_status_t = boolean;
+
+    /*  Constants for architectural state related types
+     */
+    const const_pc: addr_t;
+    const const_mem: mem_t;
+    const const_mem_taint: mem_taint_t;
+    const const_regs: regs_t;
+    const const_regs_taint: regs_taint_t;
+    const const_excp: excp_t;
+    const const_cpid: process_id_t;
+    const const_enclave_pid: [process_id_t]enclave_status_t;
+}
+
+module platform {
+    // ========================================================================================= //
+    // ARCHITECTURAL STATE
+
+    /*  Program counter
+     */
+     var pc: pc_t;
+
+    /*  Memory
+     *
+     *  The memory abstraction is indexed by an address and returns a word
+     */
+     var mem: mem_t;
+
+    /*  Register file
+     *
+     *  A register file is indexed by a register index (of type `reg_index_t`) and returns a word
+     */
+    var regs: regs_t;
+    var regs_taint: regs_taint_t;
+
+    /* Zero register is
+        (1) always equal 0
+        (2) should not be written to
+     */
+    axiom regs[zero] == 0bv64;
+
+    /*  Exception register 
+     */
+    var excp: excp_t;
+
+    /*  Current executing process ID
+     */
+    var cpid: process_id_t;
+
+    /*  Map from process IDs to enclave status.
+     */
+    var enclave_pid: [process_id_t]enclave_status_t;
+
+    // ========================================================================================= //
+    // HELPERS
+
+    /*  Helper that chooses the running process.
+     */
+    procedure choose_process()
+    {
+        havoc cpid; 
+    }
+
+    /*  Helper that sets all architectural states to constants.
+     */
+    procedure const_arch_state()
+    {
+        pc = const_pc;
+        mem = const_mem;
+        regs = const_regs;
+        regs_taint = const(false, regs_taint_t);
+        excp = const_excp;
+        cpid = const_cpid;
+        enclave_pid = const_enclave_pid;
+    }
+
+    // ========================================================================================= //
+    // READERS AND WRITERS
+
+    /*  Read the register value at index `ri`
+     */
+    define read_pc(ri: reg_index_t): pc_t = pc;
+
+    /*  Write `val` to the register location `ri`
+     */
+    procedure write_pc(pc_: pc_t)
+    {
+    	pc = pc_;
+    }
+
+	/*  Returns the next pc.
+	 *
+	 *  Each instruction is fixed width of 4 bytes (e.g. similar to RISCV).
+	 */
+	define next_pc(): addr_t = pc + 4bv64;
+
+    /*  Read the register value at index `ri`
+     */
+    define read_reg(ri: reg_index_t): word_t = regs[ri];
+
+    /*  Write `val` to the register location `ri`
+     */
+    procedure write_reg(rd: reg_index_t, val: word_t, taint: boolean)
+    {
+    	regs[rd] = val;
+        regs_taint[rd] = taint;
+    }
+
+    /*  Returns whether register has been tainted high.
+        Condition (1) check if it's the same as the start and (2) if it's tainted H.
+
+        Suffices to consider the following two cases:
+
+        [Case 1]: ri is originally H
+            1. if ri is tainted H, then fails condition (1) and incorrectly labels taint as L but doesn't propagate more
+            2. if ri is tainted L, then condition (1) succeeds but condition (2) fails, so correctly labels taint
+
+        [Case 2]: ri is originally L, then the result is always correct. This covers case 1.1 which is incorrect because the solver will always consider this instantiation.
+     */
+    // define get_regs_taint(ri: reg_index_t): boolean = ((regs_taint[ri] != const_regs_taint[ri]) && regs_taint[ri]);
+    define get_regs_taint(ri: reg_index_t): boolean = regs_taint[ri];
+
+    /*  Write `val` to the register location `ri`
+     */
+    procedure write_mem(a: addr_t, val: word_t)
+    {
+    	mem[a] = val;
+    }
+
+    /*  Return the current process ID of the executing program.
+     */
+    define pid(): process_id_t = cpid;
+
+    /*  Set the current exception flag only if it's not set.
+     */
+    procedure set_excp(excp_: excp_t)
+    {
+        if (excp == none) {
+           excp = excp_;
+        }
+    }
+
+    /*  Returns the present bit of the page table for address `a`.
+     */
+    define get_excp(): excp_t = excp;
+
+    /*  Returns whether the process ID is an enclave process.
+     */
+    define is_enclave(id: process_id_t): enclave_status_t = enclave_pid[id];
+}

@@ -1,0 +1,59 @@
+module common {
+    const zero: reg_index_t = 0bv5;
+    const r0:   reg_index_t = 1bv5;
+    const r1:   reg_index_t = 2bv5;
+    const r2:   reg_index_t = 3bv5;
+    const r3:   reg_index_t = 4bv5;
+    const sp:   reg_index_t = 5bv5;    // stack pointer
+    const gp:   reg_index_t = 6bv5;    // global pointer
+
+    const A_ADDR: addr_t = 1000bv64;
+    const B_ADDR: addr_t = 2000bv64;
+    const C_ADDR: addr_t = 3000bv64;
+
+    const M_ADDR: addr_t;
+}
+
+module platform {
+    procedure blockA()
+    {
+        // r0 = M_ADDR
+        call loadi(r0, M_ADDR);
+
+        // [M_ADDR] := r1 (some constant)
+        // without stalling of the store, there's no need to disambiguate store address
+        call store(r1, r0, 0bv64);
+
+        // go to the next block
+        call write_pc(B_ADDR);
+    }
+
+    procedure blockB()
+    {
+        // r0 := [r1] = M_ADDR
+        // transiently: r0 := [r1] = *secret_addr
+        call load(r0, r1, 0bv64);
+        // r0 := [r0] = *M_ADDR
+        // transiently: r0 = [r0] = **secret_addr
+        call load(r0, r0, 0bv64);
+
+        // go to the next block
+        call write_pc(C_ADDR);
+    }
+
+    /*  Set the initial PC
+     */
+    axiom pc_init == A_ADDR;
+
+    /*  Ignore all exceptions.
+     */
+    axiom get_excp() == none;
+
+    procedure platform_init_assumptions() {
+        call setup_bmc_init_assumptions();
+    }
+}
+
+module main {
+    procedure main_init_assumptions() {}
+}

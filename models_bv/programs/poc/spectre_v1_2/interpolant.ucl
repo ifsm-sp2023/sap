@@ -1,0 +1,230 @@
+module platform {
+    next {
+        call choose_process();
+        case
+            (pc == A_ADDR && pid() == VICTIM_PID): {
+                call blockA();
+            }
+            (pc == B_ADDR && pid() == VICTIM_PID): {
+                call blockB();
+            }
+            (pid() == ADVERSARY_PID): {
+                call adv_execute();
+            }
+            default: {
+                skip;
+            }
+        esac
+    }
+}
+
+module platform {
+
+    procedure check_blockA()
+        // ensures interpolant1();
+        ensures !observations_taint;
+        ensures !regs_taint[r0];
+        ensures !regs_taint[r1];
+        ensures !regs_taint[r2];
+        ensures !regs_taint[r3];
+        ensures !regs_taint[r4];
+        ensures !regs_taint[r5];
+        ensures lfb_taint_map == const(false, lfb_t);
+        ensures tlb_taint == const(false, tlb_taint_t);
+        ensures sb_addr_taint == const(false, store_buffer_taint_t);
+        ensures sb_data_taint == const(false, store_buffer_taint_t);
+        ensures cache_taint_addr == const(false, cache_taint_t);
+        ensures cache_taint_data == const(false, cache_taint_t);
+    {
+        call platform_init_assumptions();
+        call blockA();
+    }
+
+    define interpolant1(): boolean = 
+        !regs_taint[r0] &&
+        !regs_taint[r1] &&
+        !regs_taint[r2] &&
+        !regs_taint[r3] &&
+        !regs_taint[r4] &&
+        !regs_taint[r5] &&
+        !observations_taint;
+
+    procedure check_blockB()
+        // requires interpolant1();
+        // ensures interpolant2();
+        requires !observations_taint;
+        requires !regs_taint[r0];
+        requires !regs_taint[r1];
+        requires !regs_taint[r2];
+        requires !regs_taint[r3];
+        requires !regs_taint[r4];
+        requires !regs_taint[r5];
+        requires lfb_taint_map == const(false, lfb_t);
+        requires tlb_taint == const(false, tlb_taint_t);
+        // requires sb_addr_taint == const(false, store_buffer_taint_t);
+        // requires sb_data_taint == const(false, store_buffer_taint_t);
+        requires cache_taint_addr == const(false, cache_taint_t);
+        requires cache_taint_data == const(false, cache_taint_t);
+        // ------------------------------
+        ensures !observations_taint;
+        ensures !regs_taint[r0];
+        ensures !regs_taint[r1];
+        ensures !regs_taint[r2];
+        ensures !regs_taint[r3];
+        ensures !regs_taint[r4];
+        ensures !regs_taint[r5];
+        ensures lfb_taint_map == const(false, lfb_t);
+        ensures tlb_taint == const(false, tlb_taint_t);
+        ensures sb_addr_taint == const(false, store_buffer_taint_t);
+        ensures sb_data_taint == const(false, store_buffer_taint_t);
+        ensures cache_taint_addr == const(false, cache_taint_t);
+        ensures cache_taint_data == const(false, cache_taint_t);
+    {
+        call blockB();
+    }
+
+    define interpolant2(): boolean = 
+        !regs_taint[r0] &&
+        !regs_taint[r1] &&
+        !regs_taint[r2] &&
+        !regs_taint[r5] &&
+        !observations_taint;
+
+    procedure check_blockBM()
+        // requires interpolant2();
+        // ensures interpolant3();
+        requires !observations_taint;
+        requires !regs_taint[r0];
+        requires !regs_taint[r1];
+        requires !regs_taint[r2];
+        requires !regs_taint[r3];
+        requires !regs_taint[r4];
+        requires !regs_taint[r5];
+        requires lfb_taint_map == const(false, lfb_t);
+        requires tlb_taint == const(false, tlb_taint_t);
+        // requires sb_addr_taint == const(false, store_buffer_taint_t);
+        // requires sb_data_taint == const(false, store_buffer_taint_t);
+        requires cache_taint_addr == const(false, cache_taint_t);
+        requires cache_taint_data == const(false, cache_taint_t);
+        // ------------------------------
+        ensures !observations_taint;
+        ensures !regs_taint[r0];
+        ensures !regs_taint[r1];
+        ensures !regs_taint[r2];
+        ensures !regs_taint[r3];
+        ensures !regs_taint[r4];
+        ensures !regs_taint[r5];
+        ensures lfb_taint_map == const(false, lfb_t);
+        ensures tlb_taint == const(false, tlb_taint_t);
+        ensures sb_addr_taint == const(false, store_buffer_taint_t);
+        ensures sb_data_taint == const(false, store_buffer_taint_t);
+        ensures cache_taint_addr == const(false, cache_taint_t);
+        ensures cache_taint_data == const(false, cache_taint_t);
+    {
+        call blockBM();
+    }
+
+    define interpolant3(): boolean = 
+        !regs_taint[r0] &&
+        !regs_taint[r1] &&
+        !regs_taint[r2] &&
+        !regs_taint[r3] &&
+        !regs_taint[r4] &&
+        !regs_taint[r5] &&
+        !observations_taint;
+
+    procedure check_blockB2()
+        // requires interpolant3();
+        // ensures interpolant4();
+        requires !observations_taint;
+        requires !regs_taint[r0];
+        requires !regs_taint[r1];
+        requires !regs_taint[r2];
+        requires !regs_taint[r3];
+        requires !regs_taint[r4];
+        requires !regs_taint[r5];
+        requires lfb_taint_map == const(false, lfb_t);
+        requires tlb_taint == const(false, tlb_taint_t);
+        // requires sb_addr_taint == const(false, store_buffer_taint_t);
+        // requires sb_data_taint == const(false, store_buffer_taint_t);
+        requires cache_taint_addr == const(false, cache_taint_t);
+        requires cache_taint_data == const(false, cache_taint_t);
+        // ------------------------------
+        ensures !observations_taint;
+        ensures !regs_taint[r0];
+        ensures !regs_taint[r1];
+        ensures !regs_taint[r2];
+        ensures !regs_taint[r3];
+        ensures !regs_taint[r4];
+        ensures !regs_taint[r5];
+        ensures lfb_taint_map == const(false, lfb_t);
+        ensures tlb_taint == const(false, tlb_taint_t);
+        ensures sb_addr_taint == const(false, store_buffer_taint_t);
+        ensures sb_data_taint == const(false, store_buffer_taint_t);
+        ensures cache_taint_addr == const(false, cache_taint_t);
+        ensures cache_taint_data == const(false, cache_taint_t);
+    {
+        call blockB2();
+    }
+
+    define interpolant4(): boolean = 
+        !regs_taint[r0] &&
+        !regs_taint[r1] &&
+        !regs_taint[r2] &&
+        !observations_taint;
+
+    procedure check_adversary_end()
+        // requires interpolant4();
+        // ensures interpolant5();
+        requires !observations_taint;
+        requires !regs_taint[r0];
+        requires !regs_taint[r1];
+        requires !regs_taint[r2];
+        requires !regs_taint[r3];
+        requires !regs_taint[r4];
+        requires !regs_taint[r5];
+        requires lfb_taint_map == const(false, lfb_t);
+        requires tlb_taint == const(false, tlb_taint_t);
+        // requires sb_addr_taint == const(false, store_buffer_taint_t);
+        // requires sb_data_taint == const(false, store_buffer_taint_t);
+        requires cache_taint_addr == const(false, cache_taint_t);
+        requires cache_taint_data == const(false, cache_taint_t);
+        // ------------------------------
+        ensures !observations_taint;
+        ensures !regs_taint[r0];
+        ensures !regs_taint[r1];
+        ensures !regs_taint[r2];
+        ensures !regs_taint[r3];
+        ensures !regs_taint[r4];
+        ensures !regs_taint[r5];
+        ensures lfb_taint_map == const(false, lfb_t);
+        ensures tlb_taint == const(false, tlb_taint_t);
+        ensures sb_addr_taint == const(false, store_buffer_taint_t);
+        ensures sb_data_taint == const(false, store_buffer_taint_t);
+        ensures cache_taint_addr == const(false, cache_taint_t);
+        ensures cache_taint_data == const(false, cache_taint_t);
+    {
+        call adv_execute();
+    }
+
+    define interpolant5(): boolean =
+        !observations_taint;
+
+    control {
+        // set_solver_option(":mbqi", false);
+        set_solver_option(":case_split", 0);
+        set_solver_option(":relevancy", 0);
+        set_solver_option(":threads", 8);
+        set_solver_option(":blast_full", true);
+
+        i1 = verify(check_blockA);
+        i2 = verify(check_blockB);
+        i3 = verify(check_blockBM);
+        // i32 = verify(check_blockBM);
+        // i33 = verify(check_blockBM);
+        i4 = verify(check_blockB2);
+        i5 = verify(check_adversary_end);
+        check;
+        print_results;
+    }
+}

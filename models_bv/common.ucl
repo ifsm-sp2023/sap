@@ -1,0 +1,46 @@
+module common {
+    // ========================================================================================= //
+    // VALUE TYPES
+
+    // address
+    type addr_t = bv64;
+    type vaddr_t = bv64;
+
+    // word
+    type word_t = bv64;
+    
+    // register index
+    type reg_index_t = bv5;
+
+    // permission
+    type perm_t = record {
+        w: boolean,
+        r: boolean,
+        x: boolean,
+        present: boolean
+    };
+
+    // constants numerical values
+    const ZERO: word_t = 0bv64;
+
+    // ========================================================================================= //
+    // MEMORY
+
+	/*	The platform model models memory with only one location in memory labelled high data
+	 */
+	const secret_addr: addr_t;
+    const secret_vaddr: vaddr_t;
+	const PUBLIC_RANGE_END: addr_t;
+	const PUBLIC_RANGE_START: addr_t;
+	const PUBLIC_VRANGE_END: vaddr_t;
+	const PUBLIC_VRANGE_START: vaddr_t;
+	const STACK_DEPTH: vaddr_t = 10000bv64;
+
+	define lo_vaddr(va: vaddr_t): boolean = PUBLIC_VRANGE_START <=_u va && va <=_u PUBLIC_VRANGE_END;
+	define lo_addr(a: addr_t): boolean = PUBLIC_RANGE_START <=_u a && a <=_u PUBLIC_RANGE_END;
+    
+    // ========================================================================================= //
+    // TAINT
+
+    define tau(x: boolean, y: boolean): boolean = x || y;
+}

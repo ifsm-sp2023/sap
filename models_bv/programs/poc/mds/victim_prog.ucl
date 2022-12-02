@@ -1,0 +1,55 @@
+module common {
+    const zero: reg_index_t = 0bv5;
+    const r0:   reg_index_t = 1bv5;
+    const r1:   reg_index_t = 2bv5;
+    const r2:   reg_index_t = 3bv5;
+    const r3:   reg_index_t = 4bv5;
+    const sp:   reg_index_t = 5bv5;    // stack pointer
+    const gp:   reg_index_t = 6bv5;    // global pointer
+
+    const A_ADDR: addr_t = 1000bv64;
+    const B_ADDR: addr_t = 2000bv64;
+    const C_ADDR: addr_t = 3000bv64;
+}
+
+module platform {
+    procedure blockA()
+    {
+        // assume r0 == &new page and r1 == &buffer
+        
+        // r2 = value = *(new page)
+        // potentially fetches from the lfb
+        call load(r2, r0, 0bv64);
+
+        // r2 = 1024 * value
+        call muli(r2, r2, 1024bv64);
+
+        // r2 = buffer + 1024 * value
+        call add(r2, r2,  r1);
+
+        // r2 = *(r2)
+        call load(r3, r2, 0bv64);
+
+        // call cflush();
+
+        // goto blockB
+        call write_pc(B_ADDR);
+    }
+
+    /*  Set the initial PC
+     */
+    axiom pc_init == A_ADDR;
+
+    /*  Ignore all page faults.
+     */
+    axiom get_excp() != fault;
+
+    procedure platform_init_assumptions() {
+        call setup_bmc_init_assumptions();
+        call set_const_lfb_state();
+    }
+}
+
+module main {
+    procedure main_init_assumptions() {}
+}

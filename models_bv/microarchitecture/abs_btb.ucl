@@ -1,0 +1,63 @@
+module common {
+    /*  Map from addresses to cache line hit value.
+     */
+    type btb_hit_t = [addr_t]boolean;
+
+    /*  Constant BTB hit value
+     */
+    const const_btb_hit_map: btb_hit_t;
+
+    /*  UF that returns the predicted branch target address based on a given address.
+        `addr` is usually the program counter.
+     */
+    function predicted_btb_value(addr: addr_t): addr_t;
+}
+
+module platform {
+    // ========================================================================================= //
+    // BTB STATE VARIABLES
+
+    /*  BTB hit map.
+     *
+     *  This simple BTB model only models a hit map. BTB predictions are arbitrary addresses.
+     */
+    var btb_hit_map: btb_hit_t;
+
+    // ========================================================================================= //
+    // BTB HELPERS
+
+    /*  Set the cache state to some constant
+     */
+    procedure set_const_btb_state()
+    {
+        btb_hit_map = const_btb_hit_map;
+    }
+
+    /*  Set the BTB line.
+     */
+    procedure set_btb(addr: addr_t, hit: boolean)
+    {
+    	btb_hit_map[addr] = hit;
+    }
+
+
+    // ========================================================================================= //
+    // HARNESSES
+
+    /*  Condition to read the BTB line.
+     */
+    procedure btb_update_pc_cond()
+        returns (res: boolean)
+    {
+        res = btb_hit_map[pc];
+    }
+
+
+    /*  Read the BTB line.
+     */
+    procedure btb_update_pc()
+    {	
+        // guess a target based on the current pc
+        call write_pc(predicted_btb_value(pc));
+    }
+}

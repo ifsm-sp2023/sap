@@ -1,0 +1,89 @@
+module common {
+    /*  LFB is a map from addresses to hit value.
+     */
+    type lfb_t = [addr_t]boolean;
+
+    /*  LFB is a map from addresses to hit value.
+     */
+    const const_lfb_hit_map: lfb_t;
+}
+
+module platform {
+    // ========================================================================================= //
+    // LFB STATE VARIABLES
+
+    /*  LFB hit map.
+     *
+     *  This simple cache model only models a hit map. Cache lines exists but
+     *  reading from them would be semantically no different than reading from memory in this model.
+     */
+    var lfb_hit_map: lfb_t;
+    var lfb_taint_map: lfb_t;
+
+    // ========================================================================================= //
+    // HELPERS
+
+    procedure lfb_hit(addr: addr_t)
+    	returns (res: boolean, taint: boolean)
+    {
+    	res = lfb_hit_map[addr];
+        taint = lfb_taint_map[addr];
+    }
+
+    /*  Set the line fill buffer hit map.
+     */
+    procedure set_lfb(addr: addr_t, hit: boolean)
+    {
+    	lfb_hit_map[addr] = hit;
+        lfb_taint_map[addr] = (addr == secret_addr);
+    }
+
+    // ========================================================================================= //
+    // HARNESSES
+
+    /*  Set the LFB state to some constant
+     */
+    procedure set_const_lfb_state()
+    {
+        lfb_hit_map = const_lfb_hit_map;
+        lfb_taint_map = const(false , lfb_t);
+    }
+
+    /*  Condition for reading the line fill buffer value.
+     *  Uses an aggressive form of data speculation and forwards any value recently read.
+     */
+    procedure lfb_read_cond(rs: reg_index_t, offset: word_t)
+    	returns (res: boolean, taint: boolean)
+    {
+        var vaddr: vaddr_t;
+        var addr: addr_t;
+
+        vaddr = read_reg(rs) + offset;
+        addr = addr_map[vaddr];
+        assume (lo_translate_vaddr(vaddr));
+
+    	call (res, taint) = lfb_hit(addr);
+    }
+
+    /*  Read the line fill buffer value.
+     *  Uses an aggressive form of data speculation and forwards any value recently read.
+     */
+    procedure lfb_read(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        var vaddr: vaddr_t;
+        var addr: addr_t;
+
+        // compute physical address
+        vaddr = read_reg(rs) + offset;
+        call (addr) = ept_read_translate_vaddr(vaddr);
+        assume (lo_translate_vaddr(vaddr));
+
+        {
+        var val: word_t;
+        var taint: boolean;
+        val = mem[addr];
+        taint = get_mem_taint(addr);
+    	call write_reg(rd, val, taint);
+        }
+    }
+}

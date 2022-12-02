@@ -1,0 +1,81 @@
+module common {
+    const zero: reg_index_t = 0bv5;
+    const r0:   reg_index_t = 1bv5;
+    const r1:   reg_index_t = 2bv5;
+    const r2:   reg_index_t = 3bv5;
+    const r3:   reg_index_t = 4bv5;
+    const r4:   reg_index_t = 5bv5;
+    const r5:   reg_index_t = 6bv5;
+    const sp:   reg_index_t = 7bv5;    // stack pointer
+    const gp:   reg_index_t = 8bv5;    // global pointer
+
+    const A_ADDR: addr_t = 1000bv64;
+    const B_ADDR: addr_t = 2000bv64;
+    const BM_ADDR: addr_t = 2100bv64;
+    const B2_ADDR: addr_t = 2200bv64;
+    const C_ADDR: addr_t = 3000bv64;
+}
+
+module platform {
+    procedure blockA()
+    {
+        // assume that r0 == x, r1 == array1_size
+        call bge(r0, r1, C_ADDR, B_ADDR);    // if (x >= array1_size) goto END else ADDR_B
+    }
+
+    procedure blockB()
+    {
+        // r3 = &array1 = &vmem[gp-100]
+        call addi(r3, gp, -100bv64);
+        // r3 = array1
+        call load(r3, r3, 0bv64);
+        // r3 = array1 + x
+        call add(r4, r0, r3);
+        // r0 = array1[x]
+        call load(r4, r4, 0bv64);
+        // r0 = array1[x] * 512
+        call muli(r4, r4, 9bv64);
+
+        // flush cache line
+        // call clflush_index(r4);
+
+        // flush the entire cache
+        // call cflush();
+
+        // go to the next block
+        call write_pc(B2_ADDR);
+    }
+
+    procedure blockBM() {}
+
+    procedure blockB2()
+    {
+        // r3 = &array2
+        call addi(r3, gp, -200bv64);
+        // r3 = array2
+        call load(r3, r3, 0bv64);
+        // r0 = array2 + array1[x] << 9
+        call add(r4, r4, r3);
+        // array2[array1[x] << 9]
+        call load(r5, r4, 0bv64);
+
+        // go to the next block
+        call write_pc(C_ADDR);
+    }
+
+    /*  Set the initial PC
+     */
+    axiom pc_init == A_ADDR;
+
+    /*  Ignore all exceptions.
+     */
+    axiom get_excp() == none;
+
+    procedure platform_init_assumptions() {
+        call setup_bmc_init_assumptions();
+    }
+}
+
+module main {
+    procedure main_init_assumptions() {}
+}

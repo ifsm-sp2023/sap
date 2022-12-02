@@ -1,0 +1,22 @@
+module platform {
+    /*  List of axioms over the platform
+     */
+    axiom VICTIM_PID != ADVERSARY_PID;
+
+    const pc_init: addr_t;
+
+    init {
+        // additional assumptions
+        call platform_init_assumptions();
+
+        // change the high components of the architecture to
+        // different / unconstrained data values
+        call set_high_arch_comp();
+
+        // assume no exception initially
+        assume (excp == none);
+
+        // initial PC
+        assume (pc == pc_init);
+    }
+}

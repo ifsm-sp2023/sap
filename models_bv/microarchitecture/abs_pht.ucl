@@ -1,0 +1,71 @@
+module common {
+    /*  Abstract pattern history table and branch predictor.
+     */
+    type pht_t = [pc_t]boolean;
+
+    /*  Constant pattern history table
+     */
+    const const_pht: pht_t;
+}
+
+module platform {
+    // ========================================================================================= //
+    // PHT STATE VARIABLES
+
+    /*  Pattern history table.
+     *
+     *  This simple PHT model is modelled as a map from pc to prediction.
+     */
+    var pht: pht_t;
+
+
+    // ========================================================================================= //
+    // PHT HELPERS
+
+    /*  Set the cache state to some constant
+     */
+    procedure set_const_pht_state()
+    {
+        pht = const_pht;
+    }
+
+    /*  Set the PHT result for the given PC.
+     */
+    procedure set_pht(pc_: pc_t, hit: boolean)
+    {
+    	pht[pc_] = hit;
+    }
+
+    /*  Read the PHT result for the given PC.
+     */
+    define predict_dir(): boolean = pht[pc];
+
+
+    // ========================================================================================= //
+    // HARNESSES
+
+    /*  Condition to read prediction from PHT.
+     */
+    procedure pht_update_pc_cond()
+        returns (res: boolean)
+    {
+        res = true;
+    }
+
+    /*   Update the pc using the PHT.
+     */
+    procedure pht_update_pc(t1: addr_t, t2: addr_t)
+    {
+        var branch_dir: boolean;
+
+        // determine branch speculation direction
+        branch_dir = predict_dir();
+
+        // udpate the pc
+        if (branch_dir) {
+            call write_pc(t1);
+        } else {
+            call write_pc(t2);
+        }
+    }
+}

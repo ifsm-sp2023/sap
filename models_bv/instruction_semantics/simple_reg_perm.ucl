@@ -1,0 +1,62 @@
+module platform {
+    /*  MOV
+     *
+     *  ISA Semantics: regs[rd] = regs[rs]
+     */
+    procedure reg_perm_mov(rd: reg_index_t, rs: reg_index_t)
+    {
+        var has_perm: boolean;
+        call (has_perm) = reg_perm(rd, rs);
+        if (!has_perm) {
+            call reg_nm();
+        }
+
+        call march_mov(rd, rs);
+    }
+
+    /*  LOAD
+     *
+     *  ISA Semantics: regs[rd] = mem[regs[rs] + offset]
+     *
+     *  Paging is not enabled / bare metal version of load
+     *  
+     *  A load instruction that follows the sequence of operations:
+     *  (1) TODO: try to read from store buffer
+     *  (2) try to read from the cache
+     *  (3) read from memory
+     */
+    procedure reg_perm_load(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        var tlbrc, sbc, ptrmc, vaddr_taint: boolean;
+        var vaddr: vaddr_t;
+        var addr: addr_t;
+        vaddr = read_reg(rs) + offset;
+        vaddr_taint = get_regs_taint(rs);
+        call (addr) = translate_vaddr(vaddr);
+
+        // call load with potentially speculative semantics
+        call load_1_rg(rd, rs, offset);
+
+        // update cache
+        call update_cache(vaddr, vaddr_taint, get_mem_taint(addr));
+
+        // update TLB after an access
+        call set_tlb(vaddr, true, get_regs_taint(rs));
+    }
+
+    procedure load_1_rg(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        var rcc: boolean;
+        var vaddr, addr: addr_t;
+        call (rcc) = read_cache_cond(rs, offset);
+
+        vaddr = regs[rs] + offset;
+        call (addr) = translate_vaddr(vaddr);
+        if (rcc) {
+            // forward a value from the cache
+            call read_cache(rd, rs, offset);
+        } else {
+            call isa_load(rd, rs, offset);
+        }
+    }
+}

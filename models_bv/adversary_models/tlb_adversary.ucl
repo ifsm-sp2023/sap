@@ -1,0 +1,118 @@
+/* 	Models an adversary with access to TLB for TLB shootdown / flushes. Typically the OS / kernel.
+   	If modeling enclaves, the OS is typically untrusted / an adversary.
+ */
+module common {
+    /*  Adversary observations modeled as an uninterpreted type
+     */
+    type observations_t;
+
+    /* Adversary operations type
+     */
+    type adv_op_t = enum {
+        tamper_op,
+        read_cache_op
+    };
+
+    /*  Adversary inputs
+     */
+    type adv_input_t = record {
+        addr: addr_t
+    };
+
+    /*  Constants for adversary state related types
+     */
+    const const_observations: observations_t;
+
+    /*  Takes in all observations and returns a UT
+     */
+	function observe_hit(hit: boolean): observations_t;
+}
+
+module platform {
+
+	/*  Adversary observations
+	 */
+	var observations: observations_t;
+	var observations_taint: boolean;
+
+    /* Adversary operations
+     */
+    input adv_op: adv_op_t;
+
+	/*	Adversary inputs (constrained to be the same across all traces)
+	 */
+	input adv_input: adv_input_t;
+
+	/*	Initial state of the adversary.
+	 */
+	procedure init_adv_state()
+	{
+		observations = const_observations;
+		observations_taint = false;
+	}
+
+
+    // ========================================================================================= //
+    // TAMPER FUNCTIONS
+
+	/*	Tamper function during advesary execution.
+	 */
+	procedure adv_tamper()
+	{
+		skip;
+	}
+
+
+    // ========================================================================================= //
+    // OBSERVATION FUNCTIONS
+
+	/*	Inter-instruction observation function.
+	 *
+	 *  Reads the cache at the address `addr`.
+	 */
+	// procedure adv_obs_inter_inst()
+	// {
+	// 	var hit_: boolean;
+	// 	var _: word_t;
+		
+	// 	call (hit_, _) = tlb_read(adv_input.addr);
+	// 	observations = observe_hit(hit_, observations);
+	// }
+
+	procedure adv_obs_inter_inst()
+	{
+	}
+
+
+	/*	Adversary function for reading the tlb at the address `addr`.
+	 */
+	procedure adv_read_tlb()
+	{
+		var hit_, taint: boolean;
+		
+		call (hit_, taint) = tlb_hit(adv_input.addr);
+		observations = cache_observe(hit_);
+		observations_taint = tau(taint, observations_taint);
+	}
+
+
+    // ========================================================================================= //
+    // ADVERSARY EXECUTION FUNCTION(S)
+
+	/*	Adversary execution
+
+		Passive adversary that only reads the tlb when it executes.
+	 */
+	procedure adv_execute()
+	{
+        havoc adv_op;
+        case
+            (adv_op == tamper_op): {
+		        call adv_tamper();
+            }
+            (adv_op == read_cache_op): {
+		        call adv_read_cache();
+            }
+        esac
+    }
+}

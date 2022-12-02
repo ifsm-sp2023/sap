@@ -1,0 +1,64 @@
+module common {
+    const zero:  reg_index_t = 0bv5;
+    const rax:   reg_index_t = 1bv5;
+    const rsi:   reg_index_t = 2bv5;
+    const rdi:   reg_index_t = 3bv5;
+    const gp:    reg_index_t = 4bv5;
+    const sp:    reg_index_t = 5bv5;
+
+    const A_ADDR: addr_t = 1000bv64;
+    const B_ADDR: addr_t = 2000bv64;
+}
+
+/*  Reference: https://foreshadowattack.eu/foreshadow.pdf
+     - program models a simpified version of listing 1 
+    
+    # %rdi: oracle
+    # %rsi: secret_ptr
+
+    movb (%rsi), %al
+    shl $12, %rax
+    movq (%rdi, %rax), %rdi
+    retq
+ */
+module platform {
+    procedure blockA()
+    {
+        // movb (%rsi), %al
+        call load(rax, rsi, 0bv64);
+
+        // shl $12, %rax
+        call muli(rax, rax, 4096bv64);
+
+        // movq (%rdi, %rax), %rdi
+        call addi(rdi, rax, 0bv64);
+        call load(rdi, rdi, 0bv64);
+
+        // retq (advance the pc)
+        call write_pc(B_ADDR);
+    }
+
+    /*  Set the initial PC
+     */
+    axiom pc_init == A_ADDR;
+
+    procedure platform_init_assumptions() {
+        call setup_bmc_init_assumptions();
+        
+        // not executing an enclave
+        assume (!is_enclave(pid()));
+
+        // %rsi points to enclave memory
+        assume (enclave_owned(read_reg(rsi)));
+
+        // %rsi read permission exists
+        assume (r_perm(read_reg(rsi)));
+
+        // present bit is not set
+        assume (!p_bit(read_reg(rsi)));
+    }
+}
+
+module main {
+    procedure main_init_assumptions() {}
+}

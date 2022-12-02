@@ -1,0 +1,253 @@
+module platform {
+    // ========================================================================================= //
+    // SEMANTICS FOR THE SIMPLE INSTRUCTION SET ARCHITECTURE LANGUAGE WITH MICROARCHITECTURE UPDATES
+
+    /*  MOV
+     *
+     *  ISA Semantics: regs[rd] = regs[rs]
+     */
+    procedure march_mov(rd: reg_index_t, rs: reg_index_t)
+    {
+        call isa_mov(rd, rs);
+    }
+
+    /*  ADD
+     *
+     *  ISA Semantics: regs[rd] = regs[rs1] + regs[rs2]
+     */
+    procedure march_add(rd: reg_index_t, rs1: reg_index_t, rs2: reg_index_t)
+    {
+        call isa_add(rd, rs1, rs2);
+    }
+
+    /*  ADD IMM
+     *
+     *  ISA Semantics: regs[rd] = regs[rs1] + imm
+     */
+    procedure march_addi(rd: reg_index_t, rs: reg_index_t, imm: word_t)
+    {
+        call isa_addi(rd, rs, imm);
+    }
+
+    /*  AND IMM
+     *
+     *  ISA Semantics: regs[rd] = regs[rs1] & imm
+     */
+    procedure march_andi(rd: reg_index_t, rs: reg_index_t, imm: word_t)
+    {
+        call isa_andi(rd, rs, imm);
+    }
+
+    /*  MUL IMM
+     *
+     *  ISA Semantics: regs[rd] = regs[rs1] + imm
+     */
+    procedure march_muli(rd: reg_index_t, rs: reg_index_t, imm: word_t)
+    {
+        call isa_muli(rd, rs, imm);
+    }
+
+    /*  LOAD
+     *
+     *  ISA Semantics: regs[rd] = mem[regs[rs] + offset]
+     *
+     *  Paging is not enabled / bare metal version of load
+     *  
+     *  A load instruction that follows the sequence of operations:
+     *  (1) TODO: try to read from store buffer
+     *  (2) try to read from the cache
+     *  (3) read from memory
+     */
+    procedure march_load(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        var tlbrc, sbc, ptrmc, vaddr_taint: boolean;
+        var vaddr: vaddr_t;
+        var addr: addr_t;
+        vaddr = read_reg(rs) + offset;
+        vaddr_taint = get_regs_taint(rs);
+        call (addr) = translate_vaddr(vaddr);
+
+        // call load with potentially speculative semantics
+        call load_3(rd, rs, offset);
+
+        // update cache
+        call update_cache(vaddr, vaddr_taint, get_mem_taint(addr));
+
+        // update lfb hit map
+        call set_lfb(addr, true);
+
+        // update TLB after an access
+        call set_tlb(vaddr, true, get_regs_taint(rs));
+    }
+
+    procedure load_3(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        var sbc: boolean;
+        call (sbc) = sb_read_cond(rd, rs, offset);
+
+        if (sbc) {
+            // read from the store buffer
+            call sb_read(rd, rs, offset);
+        } else {
+            call load_2(rd, rs, offset);
+        }
+    }
+
+    procedure load_2(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        var lfbrc, lfb_taint: boolean;
+        call (lfbrc, lfb_taint) = lfb_read_cond(rs, offset);
+
+        if (lfbrc) {
+            // read from lfb instead of cache
+            // FIXME: This should be an output for cache
+            call lfb_read(rd, rs, offset);
+        } else {
+            call load_1(rd, rs, offset);
+        }
+    }
+
+    procedure load_1(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        var rcc: boolean;
+        call (rcc) = read_cache_cond(rs, offset);
+
+        if (rcc) {
+            // forward a value from the cache
+            call read_cache(rd, rs, offset);
+        } else {
+            call isa_load(rd, rs, offset);
+        }
+    }
+
+    /*  LOAD IMM
+     *
+     *  ISA Semantics: regs[rd] = imm
+     */
+    procedure march_loadi(rd: reg_index_t, imm: word_t)
+    {
+        call write_reg(rd, imm, false);
+    }
+
+    /*  STORE
+     *
+     *  Paging is not enabled / unprivileged spec / bare metal version of store
+     *
+     *  ISA Semantics: mem[regs[rd] + offset] = regs[rs]
+     *
+     *  The store instruction follows the sequence of operations:
+     *  (1) throw a page fault if it doesn't pass the legacy page table check
+     *  (2) if the address owner is an enclave and the access is invalid, return abort page semantics
+     */
+    procedure march_store(rs: reg_index_t, rd: reg_index_t, offset: word_t)
+    {
+        var rd_taint, rs_taint: boolean;
+        var vaddr: vaddr_t;
+        rd_taint = get_regs_taint(rd);
+        rs_taint = get_regs_taint(rs);
+        vaddr = read_reg(rd) + offset;
+        {
+        var sbwc, rd_taint, rs_taint: boolean;
+        call (sbwc) = sb_write_cond(rs, rd, offset);
+
+        case
+            (sbwc) : {
+                // write to store buffer
+                call sb_write(rs, rd, offset);
+            }
+            default : {
+                // or update memory directly
+                call isa_store(rs, rd, offset);
+            }
+        esac
+        }
+
+        // update cache
+        call update_cache(vaddr, rd_taint, rs_taint);
+    }
+
+    /*  Branch greater than equal to.
+     *
+     *  ISA Semantics: if (regs[rs1] >= regs[rs2]) then pc := t1 else pc := t2
+     */
+    procedure march_bge(rs1: reg_index_t, rs2: reg_index_t, t1: addr_t, t2: addr_t)
+    {
+        {
+        var phtc: boolean;
+        call (phtc) = pht_update_pc_cond();
+
+        case
+            (phtc) : {
+                // follow pht speculative semantics
+                call pht_update_pc(t1, t2);
+            }
+            default : {
+                // follow the ISA semantics
+                call isa_bge(rs1, rs2, t1, t2);
+            }
+        esac
+        }
+    }
+
+    /*  Branch greater than.
+     *
+     *  ISA Semantics: if (regs[rs1] > regs[rs2]) then pc := t1 else pc := t2
+     */
+    procedure march_bgt(rs1: reg_index_t, rs2: reg_index_t, t1: addr_t, t2: addr_t)
+    {
+        {
+        var phtc: boolean;
+        call (phtc) = pht_update_pc_cond();
+
+        if (phtc) {
+            // follow pht speculative semantics
+            call pht_update_pc(t1, t2);
+        } else {
+            // follow the ISA semantics
+            call isa_bgt(rs1, rs2, t1, t2);
+        }
+        }
+    }
+
+    /*  Indirect jump.
+     *
+     *  ISA Semantics: if (regs[rs1] >= regs[rs2]) then pc := t1 else pc := t2
+     */
+    procedure march_jmp(rd: reg_index_t)
+    {
+        var btbc: boolean;
+        call (btbc) = btb_update_pc_cond();
+
+        if (btbc) {
+            // guess the target speculatively
+            call btb_update_pc();
+        } else {
+            // jump directly to the target
+            call isa_jmp(rd);
+        }
+    }
+
+    /*  Cache line flush instruction.
+     *
+     *  Semantics: Flushes the cache line at the address
+     */
+    procedure march_clflush_index(ri: reg_index_t)
+    {
+        var vaddr: vaddr_t;
+        var addr: addr_t;
+
+        vaddr = read_reg(ri);
+        call (addr) = translate_vaddr(vaddr);
+
+        call set_cache(vaddr, addr, false, false, false);
+    }
+
+    /*  Cache flush.
+     *
+     *  Semantics: Flushes the entire cache
+     */
+    procedure march_cflush()
+    {
+        call set_const_cache_state();
+    }
+}

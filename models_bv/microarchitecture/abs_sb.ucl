@@ -1,0 +1,132 @@
+module common {
+    /*  Index to the store buffer is the tag (abstraction uses the address)
+     */
+    type tag_t = vaddr_t;
+    type sb_line_t = record {
+        valid: boolean,         // whether an entry is valid
+        spec: boolean,          // whether the store is speculative (not committed)
+        data: word_t            // data value that's stored
+    };
+    type store_buffer_t = [tag_t]sb_line_t;
+    type store_buffer_taint_t = [tag_t]boolean;
+
+    const init_store_buffer: store_buffer_t;
+}
+
+module platform {
+    // ========================================================================================= //
+    // STORE BUFFER STATE VARIABLES
+
+    /*  Store buffer is a map from address to the status of the store and its data. 
+     */
+    var store_buffer: store_buffer_t;
+    var sb_addr_taint: store_buffer_taint_t;
+    var sb_data_taint: store_buffer_taint_t;
+
+    // ========================================================================================= //
+    // HELPERS
+
+    /*  Initializes store buffer to a constant buffer.
+     */
+    procedure initialize_sb()
+    {
+        store_buffer = init_store_buffer;
+        // sb_addr_taint = const(false, store_buffer_taint_t);
+        // sb_data_taint = const(false, store_buffer_taint_t);
+    }
+
+    /*  Commit write and update cache.
+     */
+    procedure sb_commit(vaddr: vaddr_t, addr_taint: boolean)
+    {
+        var tmp: sb_line_t;
+        var addr: addr_t;
+        tmp = store_buffer[vaddr];
+
+        // set the spec bit to false
+        tmp.spec = false;
+        
+        // update store buffer
+        store_buffer[vaddr] = tmp;
+
+        // get the address
+        call (addr) = translate_vaddr(vaddr);
+
+        // update cache with value
+        // FIXME: sanity check on taint (argument #4)
+        call set_cache(vaddr, addr, true, addr_taint, get_mem_taint(addr));
+    }
+    
+
+    // ========================================================================================= //
+    // HARNESSES
+
+    /*  Read store buffer (store-to-load forwarding) condition.
+     */
+    procedure sb_read_cond(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+        returns (res: boolean)
+    {
+        var vaddr: vaddr_t;
+        var addr: addr_t;
+
+        // compute address
+        vaddr = read_reg(rs) + offset;
+        call (addr) = translate_vaddr(vaddr);
+
+        res = store_buffer[addr].valid;
+    }
+
+    /*  Read store buffer (store-to-load forwarding) condition.
+     */
+    procedure sb_read(rd: reg_index_t, rs: reg_index_t, offset: word_t)
+    {
+        var vaddr: vaddr_t;
+        var addr: addr_t;
+
+        // compute address
+        vaddr = read_reg(rs) + offset;
+        call (addr) = translate_vaddr(vaddr);
+
+        // store-to-load forward
+        // FIXME: store buffer taint
+        // call write_reg(rd, store_buffer[addr].data, sb_data_taint[addr]);
+        call write_reg(rd, store_buffer[addr].data, false);
+    }
+
+    /*  Write condition for store buffer.
+     */
+    procedure sb_write_cond(rs: reg_index_t, rd: reg_index_t, offset: word_t)
+        returns (res: boolean)
+    {
+        res = true;
+    }
+
+    /*  Write to memory via the store buffer.
+     */
+    procedure sb_write(rs: reg_index_t, rd: reg_index_t, offset: word_t)
+    {
+        var vaddr: vaddr_t;
+        var addr: addr_t;
+        var sbl: sb_line_t;
+        var val: word_t;
+
+        // compute address
+        vaddr = read_reg(rd) + offset;
+        call (addr) = translate_vaddr(vaddr);
+        assume (lo_translate_vaddr(vaddr));
+
+        // get the value to write
+        val = read_reg(rs);
+
+        // update the store buffer
+        sbl.valid = true;
+        sbl.spec = true;
+        sbl.data = val;
+        store_buffer[addr] = sbl;
+
+        // update taint maps
+        // FIXME: do sanity checks on these taint updates
+        // sb_data_taint[addr] = get_regs_taint(rs);
+        // sb_addr_taint[addr] = get_regs_taint(rd);
+    }
+}

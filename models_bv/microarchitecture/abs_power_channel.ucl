@@ -1,0 +1,29 @@
+module common {
+    type power_state_t = boolean;
+}
+
+module platform {
+    var avx2_power: power_state_t;
+    var avx2_taint: boolean;
+
+    procedure initialize_power_channel()
+    {
+        avx2_power = false;
+    }
+
+    procedure turn_on_avx2()
+    {
+        avx2_power = true;
+    }
+
+    procedure turn_off_avx2()
+    {
+        avx2_power = false;
+    }
+
+    procedure observe_avx2_power()
+        returns (res: boolean)
+    {
+        res = avx2_power;
+    }
+}

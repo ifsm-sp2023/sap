@@ -1,0 +1,80 @@
+module common {
+    const zero:  reg_index_t = 0bv5;
+    const rax:   reg_index_t = 1bv5;
+    const rcx:   reg_index_t = 2bv5;
+    const rbx:   reg_index_t = 3bv5;
+    const gp:    reg_index_t = 4bv5;
+    const sp:    reg_index_t = 5bv5;
+
+    const A_ADDR: addr_t = 1000bv64;
+    const B_ADDR: addr_t = 2000bv64;
+    const C_ADDR: addr_t = 3000bv64;
+}
+
+/*  Reference: https://meltdownattack.com/meltdown.pdf
+     - the following program models listing 2 with some simplifications
+ */
+module platform {
+
+    procedure blockA()
+    {
+        // mov al, byte [rcx]
+        call load(rax, rcx, 0bv64);
+
+        // goto blockB
+        call write_pc(B_ADDR);
+    }
+
+    procedure blockB()
+    {
+        // mov rbx, qword [rbx + rax]
+        call add(rbx, rbx, rax);
+
+        call load(rbx, rbx, 0bv64);
+        
+        // goto blockC
+        call write_pc(C_ADDR);
+    }
+
+    /*  Set the initial PC
+     */
+    axiom pc_init == A_ADDR;
+
+    /*  Ignore all exceptions.
+     */
+    axiom get_excp() != abort_page_semantics;
+
+    /*  Only verify with virtualization.
+     */
+    axiom virtualization;
+
+    /*  Additional assumptions for the program
+     */
+    procedure platform_init_assumptions() {
+        call setup_bmc_init_assumptions();
+
+        // rcx points to (secret) kernel address
+        assume (page_owner(read_reg(rcx)) != pid());
+
+        // no read permissions to rcx
+        assume (!r_perm(read_reg(rcx)));
+
+        // corresponding address translation of reg[rcx] is the secret address
+        // (not necessary)
+        assume (addr_map[read_reg(rcx)] == secret_addr);
+        
+        // assume that rcx is not cached
+        {
+        var lidx: line_idx_t;
+        var vaddr: vaddr_t;
+        vaddr = read_reg(rcx);
+        lidx.set = get_set_index(vaddr);
+        lidx.way = get_way(vaddr);
+        assume (!cache[lidx].valid);
+        }
+    }
+}
+
+module main {
+    procedure main_init_assumptions() {}
+}

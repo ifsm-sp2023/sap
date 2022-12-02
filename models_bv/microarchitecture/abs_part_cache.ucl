@@ -1,0 +1,80 @@
+/*	This file models a partitioned cache without the use of metadata information.
+ */
+module common {
+    /*  Map from process ID and address to cache line hit value.
+     */
+    type line_idx_t = record {
+    	id: process_id_t,
+    	a: addr_t
+    };
+    type cache_t = [line_idx_t]boolean;
+
+    /*  Constant cache hit value
+     */
+    const const_cache_hit_map: cache_t;
+}
+
+module platform {
+    // ========================================================================================= //
+    // CACHE STATE VARIABLES
+
+    /*  Cache hit map.
+     *
+     *  This simple cache model only models a hit map. Cache lines exists but
+     *  reading from them would be semantically no different than reading from memory in this model.
+     */
+    var cache_hit_map: cache_t;
+
+    // ========================================================================================= //
+    // CACHE HELPERS
+
+    /*  Set the cache state to some constant
+     */
+    procedure set_const_cache_state()
+    {
+        cache_hit_map = const_cache_hit_map;
+    }
+
+    /*  Set the cache line.
+     */
+    procedure set_cache(addr: addr_t, hit: boolean)
+    {
+    	var lidx: line_idx_t;
+    	lidx.id = pid();
+    	lidx.a = addr;
+    	cache_hit_map[lidx] = hit;
+    }
+
+    /*  Read the cache line.
+     */
+    procedure read_cache(addr: addr_t)
+    	returns (hit: boolean, val: word_t)
+    {
+    	var lidx: line_idx_t;
+    	lidx.id = pid();
+    	lidx.a = addr;
+    	hit = cache_hit_map[lidx];
+    	if (hit) {
+            call (val) = read_mem(addr);
+    	}
+    }
+
+    /*  Read the cache line with virtual index.
+     */
+    procedure read_vi_cache(vaddr: addr_t)
+    	returns (hit: boolean, val: word_t)
+    {
+    	var lidx: line_idx_t;
+        var addr: addr_t;
+
+        // translate addr
+        call (addr) = translate_vaddr(vaddr);
+
+    	lidx.id = pid();
+    	lidx.a = addr;
+    	hit = cache_hit_map[lidx];
+    	if (hit) {
+            call (val) = read_mem(addr);
+    	}
+    }
+}

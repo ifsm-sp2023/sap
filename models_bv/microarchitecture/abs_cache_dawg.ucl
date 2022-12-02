@@ -1,0 +1,155 @@
+module common {
+    /*  Map from process ID and address to cache line hit value.
+     */
+    type line_idx_t = record {
+    	id: process_id_t,
+        set: set_t,
+        way: way_t
+    };
+    type data_line_t = record {
+        tag: addr_t,
+        hit: boolean
+    };
+    type cache_t = [line_idx_t]data_line_t;
+
+    /*  Address to index and way/tag
+     *
+     *  The get way function is assumed to partition by process ID
+     */
+    type set_t;
+    type way_t = bv4;
+    function get_set_index(addr: addr_t): set_t;
+    function get_way(addr: addr_t, cache_metadata: cache_metadata_t): way_t;
+
+    /*  UT for the metadata of each set used for each partition
+     */
+    type cache_metadata_t;
+
+    /*  Returns the next way to evict
+     */
+    function get_next_way(cmd: cache_metadata_t): way_t;
+
+    /*  Updates the cache metadata based on the current eviction.
+     */
+    function update_cache_metadata(cmd: cache_metadata_t, w: way_t): cache_metadata_t;
+
+    /*  Constant cache hit value
+     */
+    const const_cache_hit_map: cache_t;
+
+    /*  Constant cache metadatas
+     */
+    const const_cache_metadatas: [process_id_t]cache_metadata_t;
+}
+
+module platform {
+    // ========================================================================================= //
+    // CACHE STATE VARIABLES
+
+    /*  Hit map for a virtually indexed physically tagged cache.
+     *
+     *  This simple cache model only models a hit map. Cache lines exists but
+     *  reading from them would be semantically no different than reading from memory in this model.
+     */
+    var cache_hit_map: cache_t;
+
+    /*  Partitioned cache metadata based on process id.
+     */
+    var cache_metadata: [process_id_t]cache_metadata_t;
+
+    // ========================================================================================= //
+    // CACHE HELPERS
+
+    /*  Set the cache state to some constant
+     */
+    procedure set_const_cache_state()
+    {
+        cache_hit_map = const_cache_hit_map;
+        cache_metadata = const_cache_metadatas;
+    }
+
+    /*  Set the cache line.
+     */
+    procedure set_cache(addr: addr_t, hit: boolean)
+    {
+
+        var lidx: line_idx_t;
+        var set: set_t;
+        var way: way_t;
+        var dl: data_line_t;
+        
+        // get the set and way for the address
+        lidx.id = pid();
+        lidx.set = get_set_index(addr);
+        lidx.way = get_next_way(cache_metadata[pid()]);
+
+        // assume that the way are disjoint between the victim and adversary processes
+        assume (partitioned_way(way));
+
+        // update the metadata per core
+        cache_metadata[pid()] = update_cache_metadata(cache_metadata[pid()], lidx.way);
+
+        // create the data line
+        dl.tag = addr;
+        dl.hit = hit;
+
+        // update the cache with value at the new way (possibly evicting an old element)
+        cache_hit_map[lidx] = dl;
+    }
+
+    /*  Returns whether or not a way is partitioned.
+        Note that the way separation is arbitrary. We just need to split up the adversary and victim ways.
+     */
+    define partitioned_way(way_: way_t): boolean =
+        ((pid() == VICTIM_PID) ==> (way_ > 0bv4)) &&
+        ((pid() == ADVERSARY_PID) ==> (way_ < 0bv4)) &&
+        ((pid() != VICTIM_PID && pid() != ADVERSARY_PID) ==> (way_ == 0bv4));
+
+    /*  Read the cache line.
+     */
+    procedure read_cache(addr: addr_t)
+    	returns (hit: boolean, val: word_t)
+    {
+        var lidx: line_idx_t;
+
+        lidx.id = pid();
+        lidx.set = get_set_index(addr);
+        lidx.way = get_way(addr, cache_metadata[pid()]);
+
+        // read the cache using the process assigned ways
+        assume (partitioned_way(lidx.way));
+
+    	hit = cache_hit_map[lidx].hit;
+    	if (hit) {
+            call (val) = read_mem(addr);
+    	}
+    
+        // update the cache hit value
+        call set_cache(addr, true);
+    }
+
+    /*  Read the cache line.
+     */
+    procedure read_vi_cache(vaddr: vaddr_t)
+    	returns (hit: boolean, val: word_t)
+    {
+        var lidx: line_idx_t;
+
+        lidx.id = pid();
+        lidx.set = get_set_index(vaddr);
+        lidx.way = get_way(vaddr, cache_metadata[pid()]);
+
+        // assume that the way allocated is for the current process
+        assume (partitioned_way(lidx.way));
+
+    	hit = cache_hit_map[lidx].hit;
+    	if (hit) {
+            var addr: addr_t;
+            call (addr) = translate_vaddr(vaddr);
+            call (val) = read_mem(addr);
+    	}
+    
+        // update the cache hit value
+        call set_cache(vaddr, true);
+    }
+}
